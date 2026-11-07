@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Probe output
+tools/*.txt
+
+# Misc
+*.zip
+Thumbs.db
