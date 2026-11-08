@@ -15,7 +15,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 
 1. Everything the vendor Control Center does day to day, in one small window, plus things it never had (fan curves, keyboard effects, battery stats)
 2. Power mode and GPU mode are **independent**: Eco no longer depends on picking Power Saving
-3. Lightweight: one self-contained exe (no .NET install needed), no services, no telemetry. Installer or portable, your choice
+3. Lightweight: one small exe, no services, no telemetry. Installer or portable, your choice
 4. Fn keys work **without** the vendor app: C-Helper reads them straight from the BIOS
 5. Simple, native UI with on-screen popups, modelled on G-Helper
 
@@ -107,7 +107,8 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 - **Colorful EVOL P15 23** (other Clevo / Insyde laptops with the same interface may work, but are untested)
 - The Clevo ACPI bridge driver (`CLEVO-acpibridge1.inf`), installed with the laptop drivers (it stays when the Control Center is removed)
 - `InsydeDCHU.dll`: on first run C-Helper copies it from the vendor **"Fn hot keys and OSD"** package into `%LOCALAPPDATA%\CHelper\dchu`. After that the vendor app can be uninstalled. Builds that include it (see [vendor/README.md](vendor/README.md)) need no vendor software at all
-- Windows 10 2004 or newer, 64-bit. Nothing else: the exe is self-contained (no .NET runtime to install)
+- Windows 10 2004 or newer, 64-bit
+- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). The installer downloads and installs it automatically if it is missing
 - Administrator rights (switching the GPU and the fans needs them). **Run on Startup** uses a scheduled task, so there is no UAC prompt at logon
 
 ## 📥 How to install
@@ -118,11 +119,11 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 2. Keep **Start C-Helper when I sign in** ticked
 3. Quit the vendor Control Center (or uninstall it once C-Helper has run once, if your build doesn't include the vendor files)
 
-The installer puts C-Helper in `Program Files`, adds a Start menu entry, sets up the sign-in task and, when the build includes them, the vendor DLL and the Clevo bridge driver. Uninstalling closes C-Helper cleanly first (fans handed back to the BIOS) and removes the task.
+The installer installs the .NET 8 Desktop Runtime if needed, puts C-Helper in `Program Files`, adds a Start menu entry, sets up the sign-in task and, when the build includes them, the vendor DLL and the Clevo bridge driver. Uninstalling closes C-Helper cleanly first (fans handed back to the BIOS) and removes the task.
 
 **Portable**
 
-Download `CHelper.exe`, put it anywhere and run it. Turn on **Startup** in Options to start it at sign-in.
+Download `CHelper.exe`, put it anywhere and run it (needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)). Turn on **Startup** in Options to start it at sign-in.
 
 `CHelper.exe --quit` closes a running copy cleanly (used by the installer).
 

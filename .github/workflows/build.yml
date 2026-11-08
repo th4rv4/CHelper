@@ -28,7 +28,7 @@ jobs:
           "APP_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Version $v"
 
-      - name: Publish single exe (self-contained)
+      - name: Publish single exe
         run: dotnet publish src/CHelper.csproj -c Release -o out -p:Version=${{ env.APP_VERSION }}
 
       - name: Build installer

@@ -1,7 +1,8 @@
 ; C-Helper installer (Inno Setup 6)
 ; Build:  ISCC.exe /DAppVersion=0.7.2 installer\CHelper.iss
 ; Expects the published exe in out\CHelper.exe (dotnet publish src/CHelper.csproj -c Release -o out).
-; Optional vendor files (see vendor/README.md) are bundled when present:
+; Installs the .NET 8 Desktop Runtime first if it is missing (downloaded from Microsoft).
+; Vendor files (see vendor/README.md) are bundled when present:
 ;   vendor\InsydeDCHU.dll      copied next to CHelper.exe
 ;   vendor\driver\*            Clevo ACPI bridge driver, installed with pnputil if included
 
@@ -80,6 +81,57 @@ Filename: "{sys}\schtasks.exe"; Parameters: "/delete /f /tn ""C-Helper"""; Flags
 Type: filesandordirs; Name: "{localappdata}\CHelper\dchu"
 
 [Code]
+// ---------- .NET 8 Desktop Runtime (C-Helper is framework-dependent) ----------
+const
+  DotNetUrl = 'https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe';
+
+var
+  DownloadPage: TDownloadWizardPage;
+
+function DotNetDesktop8Installed(): Boolean;
+var
+  Find: TFindRec;
+begin
+  Result := FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\8.*'), Find);
+  if Result then FindClose(Find);
+end;
+
+procedure InitializeWizard();
+begin
+  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), 'Downloading the .NET 8 Desktop Runtime...', nil);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  if (CurPageID <> wpReady) or DotNetDesktop8Installed() then Exit;
+
+  DownloadPage.Clear;
+  DownloadPage.Add(DotNetUrl, 'dotnet-desktop-8-x64.exe', '');
+  DownloadPage.Show;
+  try
+    try
+      DownloadPage.Download;
+      DownloadPage.SetText('Installing the .NET 8 Desktop Runtime...', '');
+      if not Exec(ExpandConstant('{tmp}\dotnet-desktop-8-x64.exe'), '/install /quiet /norestart', '',
+                  SW_SHOW, ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 0) and (ResultCode <> 3010)) then
+      begin
+        MsgBox('The .NET 8 Desktop Runtime could not be installed (code ' + IntToStr(ResultCode) + ').' + #13#10 +
+               'Install it from https://dotnet.microsoft.com/download/dotnet/8.0 and run setup again.', mbError, MB_OK);
+        Result := False;
+      end;
+    except
+      MsgBox('Downloading the .NET 8 Desktop Runtime failed:' + #13#10 + GetExceptionMessage + #13#10 +
+             'Check the internet connection, or install it from https://dotnet.microsoft.com/download/dotnet/8.0', mbError, MB_OK);
+      Result := False;
+    end;
+  finally
+    DownloadPage.Hide;
+  end;
+end;
+
 // Close a running copy (installed or portable) before files are replaced, using C-Helper's own clean quit.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
