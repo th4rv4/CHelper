@@ -16,6 +16,13 @@ internal static class Program
             return;
         }
 
+        // "CHelper.exe --install-task" (run elevated by the installer) creates the sign-in task.
+        if (args.Contains("--install-task", StringComparer.OrdinalIgnoreCase))
+        {
+            Startup.Enable();
+            return;
+        }
+
         bool startHidden = args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
 
         // Already running? Just bring it forward. Works from a non-elevated copy, so taskbar and Start menu
@@ -49,6 +56,8 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         Settings.Load();
         Log.Info("C-Helper starting");
+        // Fix sign-in tasks from older versions that Windows stops when the charger is unplugged.
+        Task.Run(Startup.RepairIfNeeded);
 
         try
         {

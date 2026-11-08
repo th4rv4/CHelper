@@ -66,10 +66,10 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; Clevo ACPI bridge driver (only if it was bundled and the laptop is missing it)
 Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\driver\*.inf"" /install"; \
   StatusMsg: "Installing the Clevo ACPI bridge driver..."; Flags: runhidden waituntilterminated; Check: NeedsBridgeDriver
-; Same scheduled task C-Helper's own Startup option uses (runs elevated at sign-in, no UAC prompt)
-Filename: "{sys}\schtasks.exe"; \
-  Parameters: "/create /f /tn ""C-Helper"" /tr ""\""{app}\{#AppExe}\"" --tray"" /sc onlogon /rl highest /delay 0000:10"; \
-  Flags: runhidden waituntilterminated; Tasks: startup
+; Same sign-in task C-Helper's own Startup option makes (runs elevated at sign-in, no UAC prompt). C-Helper
+; writes it as XML so it also runs on battery: plain "schtasks /create" lets Windows stop it on unplug.
+Filename: "{app}\{#AppExe}"; Parameters: "--install-task"; StatusMsg: "Setting up start at sign-in..."; \
+  Flags: runhidden waituntilterminated runascurrentuser; Tasks: startup
 ; runascurrentuser: Setup is already elevated; C-Helper's manifest requires admin, so launching it as the
 ; original (non-admin) user fails with error 740
 Filename: "{app}\{#AppExe}"; Description: "Launch C-Helper"; Flags: nowait postinstall skipifsilent runascurrentuser
