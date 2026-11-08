@@ -5,7 +5,9 @@
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
         <!-- Admin is needed to toggle the NVIDIA platform device for Eco mode, like the vendor helper does. -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- asInvoker: a second copy started from the taskbar only signals the running one, without a UAC prompt.
+             Program.cs relaunches elevated (through the sign-in task when possible) when admin is needed. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

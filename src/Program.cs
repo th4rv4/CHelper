@@ -16,6 +16,23 @@ internal static class Program
             return;
         }
 
+        bool startHidden = args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
+
+        // Already running? Just bring it forward. Works from a non-elevated copy, so taskbar and Start menu
+        // clicks never show a UAC prompt.
+        if (Instance.IsRunning)
+        {
+            if (!startHidden) Instance.Signal(Instance.ShowMessage);
+            return;
+        }
+
+        // Hardware access needs admin: start the elevated copy (via the sign-in task when possible) and leave.
+        if (!Instance.IsElevated())
+        {
+            Instance.StartElevated(showWindow: !startHidden);
+            return;
+        }
+
         using var mutex = new Mutex(true, "CHelper.SingleInstance", out bool firstInstance);
         if (!firstInstance)
         {
@@ -54,7 +71,6 @@ internal static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => Log.Error("UI exception", e.Exception);
 
-        bool startHidden = args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
         var context = new TrayContext(startHidden);
         Task.Run(() =>
         {
@@ -68,6 +84,13 @@ internal static class Program
 
     private static void QuitRunning()
     {
+        if (Instance.Signal(Instance.QuitMessage))
+        {
+            Instance.WaitForExit(10_000);
+            return;
+        }
+
+        // Older versions only listen for the named event.
         try
         {
             using var ev = EventWaitHandle.OpenExisting(TrayContext.QuitEventName);

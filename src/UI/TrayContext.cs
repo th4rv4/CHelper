@@ -14,6 +14,7 @@ public sealed class TrayContext : ApplicationContext
     private readonly EventWaitHandle _showEvent;
     private readonly Controller _c = Controller.Instance;
     private GlobalHotkeys _hotkeys;
+    private Instance.Window _instance;
 
     private static readonly PowerMode[] CycleOrder =
         { PowerMode.Quiet, PowerMode.PowerSaving, PowerMode.Entertainment, PowerMode.Performance };
@@ -68,6 +69,11 @@ public sealed class TrayContext : ApplicationContext
         // Fn keys straight from the BIOS (works without any vendor software)
         LockKeys.Toggled += key => _fnKeys.ShowLock(key);
         LockKeys.Start();
+
+        // Taskbar / Start menu clicks from a non-elevated copy ("show") and the installer ("quit")
+        _instance = new Instance.Window();
+        _instance.ShowRequested += () => _form.ShowNearTray();
+        _instance.QuitRequested += Quit;
 
         // G-Helper's shortcuts: Ctrl+Shift+F5 next power mode, Ctrl+Shift+Alt+F5 previous
         _hotkeys = new GlobalHotkeys();
@@ -165,6 +171,7 @@ public sealed class TrayContext : ApplicationContext
     private void Quit()
     {
         _hotkeys?.Dispose();
+        _instance?.Dispose();
         HotkeyListener.Shutdown();
         LockKeys.Stop();
         _tray.Visible = false;
