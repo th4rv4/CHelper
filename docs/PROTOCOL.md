@@ -35,6 +35,7 @@ Writes that carry a sub-command pack the value in the low bytes and the sub-comm
 | Fn-key events | open `ACPI#CLV0001` interface, IOCTL `0x322404` (register event handle), wait, IOCTL `0x322408` → 8-byte code | Fn+Esc = 149 | from vendor PCC.exe |
 | Fan duty | Write `0x68`, value = fan1 \| fan2 << 8 \| fan3 << 16 (0–255 each) | EC holds the duty until released | confirmed |
 | Fan release | Write `0x69`, value `0x0F` | all fans back to EC control (value 0 does **not** release) | confirmed |
+| Enable key events | Write `0x46`, value 0 | BIOS only sends Fn key events after this; forgotten on sleep, so send at startup and on resume (same as Linux `CLEVO_CMD_SET_EVENTS_ENABLED`) | confirmed |
 | Keyboard backlight timeout | Write `0x79`, sub `0x18` | value = seconds << 8 \| 0xFF; 0 = never (vendor default 30 s) | from vendor code |
 | CPU fan / temp | Read `0x63` | byte0 = duty 0–255, byte2 = °C | confirmed |
 | GPU fan / temp | Read `0x64` | byte0 = duty 0–255, byte2 = °C (meaningless while dGPU is off) | confirmed |
