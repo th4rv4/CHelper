@@ -51,6 +51,10 @@ public static class Dchu
         {
             source = LocalCopy;
         }
+        else if (ExtractEmbedded())
+        {
+            source = "embedded copy";
+        }
         else
         {
             throw new FileNotFoundException(
@@ -66,6 +70,19 @@ public static class Dchu
         _getBuf = Marshal.GetDelegateForFunctionPointer<GetBufFn>(NativeLibrary.GetExport(lib, "GetDCHU_Data_Buffer"));
         LoadedFrom = source;
         Log.Info($"DCHU loaded from {source}");
+    }
+
+    /// <summary>
+    /// Builds made with vendor/InsydeDCHU.dll present carry the DLL inside the exe (see vendor/README.md);
+    /// write it out to the private copy so the app works with no vendor software installed at all.
+    /// </summary>
+    private static bool ExtractEmbedded()
+    {
+        using var stream = typeof(Dchu).Assembly.GetManifestResourceStream("InsydeDCHU.dll");
+        if (stream == null) return false;
+        using (var file = File.Create(LocalCopy)) stream.CopyTo(file);
+        Log.Info("InsydeDCHU.dll extracted from the exe");
+        return true;
     }
 
     private static string FindDll(string preferred)
