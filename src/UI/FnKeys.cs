@@ -20,7 +20,6 @@ public sealed class FnKeys
     private readonly OsdForm _osd = new();
     private readonly Controller _c = Controller.Instance;
     private int _lastOnBrightness = 75;
-    private bool _touchpadOn = true; // assumed on at start; the EC toggles it and only reports "toggled"
 
     public FnKeys(MainForm main)
     {
@@ -79,9 +78,7 @@ public sealed class FnKeys
             case BiosEvents.TouchpadToggle:
             case BiosEvents.TouchpadA:
             case BiosEvents.TouchpadB:
-                // Treated as "toggle": ToggleTouchpad checks what Windows did and switches it if nothing changed,
-                // so the popup always shows the real state.
-                Task.Run(ToggleTouchpad);
+                PressTouchpad();
                 break;
 
             case BiosEvents.PowerModeKey:
@@ -132,38 +129,73 @@ public sealed class FnKeys
         }
     }
 
-    /// <summary>
-    /// The touchpad key only reports "toggled". Windows does the actual switching (Win+Ctrl+F24) and keeps the
-    /// real state in the registry, so read it, toggle ourselves if nothing changed, and show the true state.
-    /// </summary>
-    private readonly object _touchpadGate = new();
+    // ---------------- touchpad ----------------
+    // The touchpad key only reports "pressed"; Windows keeps the real state in the registry and switches it on
+    // Win+Ctrl+F24. Each press flips the state we want and shows it straight away; one background worker then
+    // brings Windows to that state. Fast presses no longer queue up a second of work each, and an even number
+    // of presses that arrive while it is busy simply cancel out.
 
-    private void ToggleTouchpad()
+    private volatile bool _touchpadWanted = true;
+    private int _touchpadBusy; // 1 while the worker runs
+
+    /// <summary>Call on the UI thread.</summary>
+    private void PressTouchpad()
     {
-        // One press at a time: overlapping checks would see each other's change and skip a press.
-        lock (_touchpadGate)
+        bool busy = Volatile.Read(ref _touchpadBusy) == 1;
+        bool current = busy ? _touchpadWanted : Touchpad.IsEnabled() ?? _touchpadWanted;
+        bool want = !current;
+        _touchpadWanted = want;
+        _osd.ShowOsd("touchpad", want ? "Touchpad On" : "Touchpad Off");
+        if (Interlocked.Exchange(ref _touchpadBusy, 1) == 0) Task.Run(SyncTouchpad);
+    }
+
+    private void SyncTouchpad()
+    {
         try
         {
-            bool? before = Touchpad.IsEnabled();
-            Thread.Sleep(400);
-            bool? after = Touchpad.IsEnabled();
-            string how = "by Windows";
-            if (before.HasValue && after == before)
+            while (true)
             {
-                Touchpad.Toggle();
-                how = "by C-Helper (Win+Ctrl+F24)";
-                Thread.Sleep(400);
-                after = Touchpad.IsEnabled();
+                int toggles = 0;
+                bool? actual = Touchpad.IsEnabled();
+                // Windows itself may handle the key on some setups; give it a moment before stepping in.
+                if (actual.HasValue && actual != _touchpadWanted) actual = WaitForChange(actual.Value, 150);
+
+                while (actual != _touchpadWanted && toggles < 6)
+                {
+                    bool? before = actual;
+                    Touchpad.Toggle();
+                    toggles++;
+                    if (!before.HasValue) break; // state unknown: one toggle per press is all we can do
+                    actual = WaitForChange(before.Value, 800);
+                }
+
+                Log.Info($"Touchpad {(_touchpadWanted ? "on" : "off")} (registry {actual?.ToString() ?? "?"}, {toggles} toggle(s) by C-Helper)");
+
+                Volatile.Write(ref _touchpadBusy, 0);
+                // A press may have landed between the last check and releasing the worker.
+                if (Touchpad.IsEnabled() is not bool now || now == _touchpadWanted) return;
+                if (Interlocked.Exchange(ref _touchpadBusy, 1) != 0) return;
             }
-            bool on = after ?? !_touchpadOn;
-            _touchpadOn = on;
-            Log.Info($"Touchpad {(on ? "on" : "off")} (toggled {how}, registry {before?.ToString() ?? "?"} -> {after?.ToString() ?? "?"})");
-            _main.BeginInvoke(new Action(() => _osd.ShowOsd("touchpad", on ? "Touchpad On" : "Touchpad Off")));
         }
         catch (Exception ex)
         {
+            Volatile.Write(ref _touchpadBusy, 0);
             Log.Error("Touchpad toggle failed", ex);
         }
+    }
+
+    /// <summary>Polls the registry until the state differs from <paramref name="from"/> (or the time runs out).</summary>
+    private static bool? WaitForChange(bool from, int timeoutMs)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        bool? now = from;
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            Thread.Sleep(25);
+            now = Touchpad.IsEnabled();
+            if (now != from) break;
+        }
+        return now;
     }
 
     /// <summary>Caps / Num / Scroll Lock popup (call on the UI thread).</summary>
