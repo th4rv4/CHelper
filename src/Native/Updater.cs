@@ -97,13 +97,23 @@ public static class Updater
         using var http = NewClient(TimeSpan.FromMinutes(10));
 
         // "<hash>  CHelper-Setup-x.y.z.exe"
-        string shaText = await http.GetStringAsync(info.ShaUrl).ConfigureAwait(false);
+        string shaText = await WithRetries("checksum", info.ShaUrl, () => http.GetStringAsync(info.ShaUrl)).ConfigureAwait(false);
         string expected = shaText.Trim().Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0];
         if (expected.Length != 64) throw new InvalidDataException("The release checksum file is not valid.");
 
-        using (var resp = await http.GetAsync(info.SetupUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+        using (var resp = await WithRetries("installer", info.SetupUrl, async () =>
+               {
+                   var r = await http.GetAsync(info.SetupUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                   if (!r.IsSuccessStatusCode)
+                   {
+                       var code = r.StatusCode;
+                       string host = r.RequestMessage?.RequestUri?.Host ?? "?";
+                       r.Dispose();
+                       throw new HttpRequestException($"{(int)code} {code} from {host}", null, code);
+                   }
+                   return r;
+               }).ConfigureAwait(false))
         {
-            resp.EnsureSuccessStatusCode();
             long total = resp.Content.Headers.ContentLength ?? info.Size;
             await using var src = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
             await using var dst = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -134,6 +144,27 @@ public static class Updater
 
         Log.Info($"Update {info.Version.ToString(3)} downloaded and verified ({actual})");
         return path;
+    }
+
+    /// <summary>
+    /// GitHub's download servers sometimes answer 5xx for a few seconds: try 3 times (2 s, then 5 s apart) and log
+    /// each failure with the URL, so a lasting problem can be told apart from a hiccup.
+    /// </summary>
+    private static async Task<T> WithRetries<T>(string what, string url, Func<Task<T>> attempt)
+    {
+        int[] waits = { 2000, 5000 };
+        for (int i = 0; ; i++)
+        {
+            try
+            {
+                return await attempt().ConfigureAwait(false);
+            }
+            catch (Exception ex) when ((ex is HttpRequestException or TaskCanceledException) && i < waits.Length)
+            {
+                Log.Info($"Update {what} download attempt {i + 1} failed ({ex.Message}) for {url}; retrying");
+                await Task.Delay(waits[i]).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>
