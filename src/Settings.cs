@@ -47,6 +47,11 @@ public sealed class AppSettings
 
     /// <summary>Full Charge Once: the charge limit to put back after unplugging (0 = not active).</summary>
     public int FullChargeRestore { get; set; }
+
+    /// <summary>Check GitHub for a newer C-Helper once a day.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+    /// <summary>Newest version the "Update Available" popup was shown for (shown once per version).</summary>
+    public string UpdateNotified { get; set; }
 }
 
 public static class Settings

@@ -41,6 +41,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 - Keyboard backlight timer for charger and battery
 - **Full Charge Once**: charges to 100 % this time; the charge limit comes back by itself when you unplug
 - Settings are re-applied after sleep and when the charger is connected or removed
+- **Updates**: checks GitHub Releases once a day; when a newer version is out, the footer shows **Update To vX.Y.Z**. One click downloads the installer, checks its SHA-256, installs it silently and reopens C-Helper. Click the version number to check right away
 
 ### :rocket: Power Modes
 
@@ -120,7 +121,7 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 2. Keep **Start C-Helper when I sign in** ticked
 3. Quit the vendor Control Center (or uninstall it once C-Helper has run once, if your build doesn't include the vendor files)
 
-The installer installs the .NET 8 Desktop Runtime if needed, puts C-Helper in `Program Files`, adds a Start menu entry, sets up the sign-in task and, when the build includes them, the vendor DLL and the Clevo bridge driver. Uninstalling closes C-Helper cleanly first (fans handed back to the BIOS) and removes the task.
+The installer installs the .NET 8 Desktop Runtime if needed, puts C-Helper in `Program Files`, adds a Start menu entry, sets up the sign-in task and, when the build includes them, the vendor DLL and the Clevo bridge driver. Uninstalling closes C-Helper cleanly first (fans handed back to the BIOS) and removes the task. Later versions can be installed from inside C-Helper (footer → **Update To …**).
 
 **Portable**
 

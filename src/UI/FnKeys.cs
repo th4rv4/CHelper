@@ -232,6 +232,9 @@ public sealed class FnKeys
     }
 
     /// <summary>Popup for a power mode change made outside the window (tray menu).</summary>
+    /// <summary>A one-line popup (e.g. "Update Available · v0.9.1"). Runs on the UI thread.</summary>
+    public void ShowText(string icon, string text) => _osd.ShowOsd(icon, text);
+
     public void ShowMode(PowerMode mode)
     {
         var (icon, name) = mode switch

@@ -35,6 +35,16 @@ public sealed class MainForm : Form
     private static readonly KbSpeed[] SpeedOrder = { KbSpeed.Slow, KbSpeed.Normal, KbSpeed.Fast };
     private static readonly HeatSource[] HeatOrder = { HeatSource.Cpu, HeatSource.Gpu, HeatSource.Hottest };
     private Label _kbSpeedLabel;
+    private Label _verLabel;
+    private TileButton _updateBtn;
+    private UpdateInfo _update;
+    private bool _checking, _installing;
+
+    /// <summary>The once-a-day check found a version the popup hasn't been shown for yet.</summary>
+    public event Action<UpdateInfo> UpdateFound;
+
+    // First check 30 s after start, then once a day.
+    private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 30_000 };
     private static readonly int[] TimeoutSteps = { 0, 15, 30, 60, 300 };
     private static readonly Color[] Rainbow =
         { Color.Red, Color.Yellow, Color.Lime, Color.Cyan, Color.Blue, Color.Magenta, Color.Red };
@@ -83,6 +93,13 @@ public sealed class MainForm : Form
             _trim.Stop();
             if (!Visible) Task.Run(() => Memory.Trim("hidden"));
         };
+        _updateTimer.Tick += (_, _) =>
+        {
+            if (_updateTimer.Interval == 30_000) Updater.CleanUp();
+            _updateTimer.Interval = 24 * 60 * 60 * 1000;
+            if (Settings.Current.CheckForUpdates) _ = CheckForUpdatesAsync(manual: false);
+        };
+        _updateTimer.Start();
         Task.Run(() =>
         {
             _startupEnabled = Startup.IsEnabled();
@@ -321,14 +338,33 @@ public sealed class MainForm : Form
         });
         _y += 10;
 
-        Controls.Add(new Label
+        // Version · update status; click to check now. Replaced by an Update button when a newer release exists.
+        _verLabel = new Label
         {
-            Text = $"v{Application.ProductVersion.Split('+')[0]}",
+            Text = Updater.CurrentText,
             Location = new Point(S(Pad), S(_y + 9)),
             AutoSize = true,
             ForeColor = Theme.Muted,
             Font = _fSmall,
-        });
+            Cursor = Cursors.Hand,
+        };
+        _verLabel.Click += (_, _) => _ = CheckForUpdatesAsync(manual: true);
+        Controls.Add(_verLabel);
+
+        _updateBtn = new TileButton
+        {
+            IconName = "startup",
+            IconSize = 14,
+            Vertical = false,
+            Active = true,
+            Accent = Theme.Accent,
+            Font = _fSmall,
+            Location = new Point(S(Pad), S(_y + 1)),
+            Size = new Size(S(176), S(32)),
+            Visible = false,
+        };
+        _updateBtn.Click += (_, _) => _ = InstallUpdateAsync();
+        Controls.Add(_updateBtn);
 
         var log = new TileButton
         {
@@ -338,7 +374,7 @@ public sealed class MainForm : Form
             Vertical = false,
             Borderless = true,
             Font = _fSmall,
-            Location = new Point(S(Pad + 60), S(_y + 2)),
+            Location = new Point(S(Pad + 196), S(_y + 2)),
             Size = new Size(S(64), S(30)),
         };
         log.Click += (_, _) => OpenLog();
@@ -359,6 +395,86 @@ public sealed class MainForm : Form
         _y += 34 + 12;
 
         ClientSize = new Size(S(ContentWidth + Pad * 2), S(_y));
+    }
+
+    // ---------------- updates ----------------
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        if (_checking || _installing) return;
+        _checking = true;
+        if (manual) _verLabel.Text = $"{Updater.CurrentText} · Checking…";
+        try
+        {
+            var found = await Task.Run(() => Updater.CheckAsync());
+            if (IsDisposed) return;
+            _update = found;
+            if (found == null)
+            {
+                _verLabel.Text = $"{Updater.CurrentText} · Up To Date";
+                return;
+            }
+
+            string v = found.Version.ToString(3);
+            Log.Info($"Update available: {v}");
+            ShowUpdateButton($"Update To v{v}");
+            if (!manual && Settings.Current.UpdateNotified != v)
+            {
+                Settings.Current.UpdateNotified = v;
+                Settings.Save();
+                UpdateFound?.Invoke(found);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update check failed", ex);
+            if (!IsDisposed && _update == null) _verLabel.Text = $"{Updater.CurrentText} · Couldn't Check";
+        }
+        finally
+        {
+            _checking = false;
+        }
+    }
+
+    private void ShowUpdateButton(string text)
+    {
+        _updateBtn.Text = text;
+        _updateBtn.Progress = -1;
+        _updateBtn.Enabled = true;
+        _updateBtn.Visible = true;
+        _verLabel.Visible = false;
+    }
+
+    private async Task InstallUpdateAsync()
+    {
+        if (_update == null || _installing) return;
+        _installing = true;
+        _updateBtn.Enabled = false;
+        _updateBtn.Text = "Downloading 0%";
+        _updateBtn.Progress = 0;
+        try
+        {
+            var progress = new Progress<int>(p =>
+            {
+                if (IsDisposed) return;
+                _updateBtn.Text = $"Downloading {p}%";
+                _updateBtn.Progress = p;
+            });
+            string setup = await Task.Run(() => Updater.DownloadAsync(_update, progress));
+            if (IsDisposed) return;
+
+            _updateBtn.Text = "Installing…";
+            _updateBtn.Progress = 100;
+            Updater.RunInstaller(setup);
+            // Quit cleanly (fans back to the BIOS); the installer starts the new version when it's done.
+            QuitRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update failed", ex);
+            _installing = false;
+            if (!IsDisposed) ShowUpdateButton("Update Failed · Retry");
+        }
     }
 
     private string FanHint()

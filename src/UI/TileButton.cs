@@ -36,6 +36,10 @@ public sealed class TileButton : Control
     public Color[] Gradient { get => _gradient; set { _gradient = value; Invalidate(); } }
 
     /// <summary>Icon above text (true) or before text (false).</summary>
+    /// <summary>0-100 draws a progress fill behind the content (e.g. a download); -1 = none.</summary>
+    public int Progress { get => _progress; set { value = Math.Clamp(value, -1, 100); if (_progress != value) { _progress = value; Invalidate(); } } }
+    private int _progress = -1;
+
     public bool Vertical { get; set; } = true;
     public int IconSize { get; set; } = 28;
     public bool Borderless { get; set; }
@@ -87,6 +91,15 @@ public sealed class TileButton : Control
             {
                 using var b = new SolidBrush(back);
                 g.FillPath(b, path);
+            }
+
+            if (_progress >= 0 && rect.Width > 0)
+            {
+                var clip = g.Clip;
+                g.SetClip(new Rectangle(rect.X, rect.Y, rect.Width * _progress / 100, rect.Height + 1));
+                using var pb = new SolidBrush(Theme.AccentDim);
+                g.FillPath(pb, path);
+                g.Clip = clip;
             }
 
             Color border = showActive ? _accent : (_hover && Enabled ? Theme.LineHover : Theme.Line);
