@@ -64,6 +64,8 @@ public sealed class TrayContext : ApplicationContext
 
         // Fn keys straight from the BIOS (works without any vendor software)
         LockKeys.Toggled += key => _fnKeys.ShowLock(key);
+        LockKeys.LogSpecialKeys = Settings.Current.LogSpecialKeys;
+        if (LockKeys.LogSpecialKeys) Log.Info("Logging special keys (LogSpecialKeys in config.json)");
         LockKeys.Start();
 
         // Taskbar / Start menu clicks from a non-elevated copy ("show") and the installer ("quit")
