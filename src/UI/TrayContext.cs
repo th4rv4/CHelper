@@ -6,6 +6,7 @@ namespace CHelper.UI;
 public sealed class TrayContext : ApplicationContext
 {
     public const string ShowEventName = "CHelper.ShowWindow";
+    public const string QuitEventName = "CHelper.Quit";
 
     private readonly NotifyIcon _tray;
     private readonly MainForm _form;
@@ -47,6 +48,14 @@ public sealed class TrayContext : ApplicationContext
             }
         }) { IsBackground = true };
         listener.Start();
+
+        // "CHelper.exe --quit" (installer / uninstaller) signals this to exit cleanly.
+        var quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+        new Thread(() =>
+        {
+            quitEvent.WaitOne();
+            if (!_form.IsDisposed) _form.BeginInvoke(new Action(Quit));
+        }) { IsBackground = true }.Start();
 
         _c.StateChanged += () =>
         {

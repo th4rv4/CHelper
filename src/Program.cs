@@ -8,6 +8,14 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // "CHelper.exe --quit" asks a running copy to exit cleanly (fans handed back first).
+        // Used by the installer and uninstaller.
+        if (args.Contains("--quit", StringComparer.OrdinalIgnoreCase))
+        {
+            QuitRunning();
+            return;
+        }
+
         using var mutex = new Mutex(true, "CHelper.SingleInstance", out bool firstInstance);
         if (!firstInstance)
         {
@@ -56,6 +64,33 @@ internal static class Program
         Application.Run(context);
         SafeShutdown("exit");
         Log.Info("C-Helper exiting");
+    }
+
+    private static void QuitRunning()
+    {
+        try
+        {
+            using var ev = EventWaitHandle.OpenExisting(TrayContext.QuitEventName);
+            ev.Set();
+        }
+        catch (WaitHandleCannotBeOpenedException)
+        {
+            return; // not running
+        }
+
+        // Wait (up to 10 s) until it has released the single-instance mutex.
+        for (int i = 0; i < 100; i++)
+        {
+            try
+            {
+                using var m = Mutex.OpenExisting("CHelper.SingleInstance");
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                return;
+            }
+            Thread.Sleep(100);
+        }
     }
 
     private static int _shutdown;
