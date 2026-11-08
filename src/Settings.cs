@@ -52,9 +52,6 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
     /// <summary>Newest version the "Update Available" popup was shown for (shown once per version).</summary>
     public string UpdateNotified { get; set; }
-
-    /// <summary>Debugging: log non-typing keys (see LockKeys.LogSpecialKeys). Off by default.</summary>
-    public bool LogSpecialKeys { get; set; }
 }
 
 public static class Settings

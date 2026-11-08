@@ -41,16 +41,6 @@ public static class LockKeys
     private const int WM_SYSKEYDOWN = 0x0104;
     private static readonly HashSet<Keys> _held = new();
 
-    /// <summary>
-    /// Debugging aid ("LogSpecialKeys": true in config.json): log every key that isn't used for typing, to find
-    /// what odd keys like Fn+F4 send. Letters, digits, punctuation and Space are never logged.
-    /// </summary>
-    public static bool LogSpecialKeys { get; set; }
-
-    private static bool IsTypingKey(Keys k) =>
-        k is >= Keys.A and <= Keys.Z or >= Keys.D0 and <= Keys.D9 or >= Keys.NumPad0 and <= Keys.Divide
-          or Keys.Space or >= Keys.OemSemicolon and <= Keys.Oem102;
-
     // Trigger on key-down (first press only, not auto-repeat): on this keyboard the key-up for
     // Num Lock is not always delivered, so waiting for key-up missed the "off" press.
     private static IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
@@ -60,8 +50,6 @@ public static class LockKeys
             var key = (Keys)Marshal.ReadInt32(lParam);           // KBDLLHOOKSTRUCT.vkCode
             int scan = Marshal.ReadInt32(lParam, 4);              // scanCode
             int flags = Marshal.ReadInt32(lParam, 8);             // flags
-            if (LogSpecialKeys && !IsTypingKey(key) && key is not (Keys.CapsLock or Keys.NumLock or Keys.Scroll or Keys.Pause))
-                Log.Info($"Key {key} (vk 0x{(int)key:X2}) {(wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN ? "down" : "up")} scan=0x{scan:X2} flags=0x{flags:X2}");
             if (key is Keys.CapsLock or Keys.NumLock or Keys.Scroll or Keys.Pause)
             {
                 bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
