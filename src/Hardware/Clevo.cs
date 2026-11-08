@@ -88,6 +88,13 @@ public static class Clevo
         Dchu.SetData(CmdFanDuty, BitConverter.GetBytes(c | (g << 8) | (g << 16)), log);
     }
 
+    /// <summary>
+    /// Tell the BIOS to send Fn key events (CLEVO_CMD_SET_EVENTS_ENABLED, cmd 0x46 value 0). Without it no hotkey
+    /// events arrive; the BIOS forgets it on sleep, so it is sent at startup and after every resume, like the
+    /// Linux clevo driver and the vendor app do.
+    /// </summary>
+    public static void EnableEvents() => Dchu.SetData(0x46, new byte[4]);
+
     /// <summary>Hand all fans back to the EC's own control.</summary>
     public static void SetFanAuto() => Dchu.SetData(CmdFanAuto, BitConverter.GetBytes(0x0F));
 

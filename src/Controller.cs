@@ -60,6 +60,7 @@ public sealed class Controller
         DgpuPresent = Gpu.IsDgpuPresent();
         Safe("charger read", () => Charge = Charger.Read());
         VendorHotkey.SetEnabled(S.FnEscOpensHelper);
+        Safe("enable BIOS key events", Clevo.EnableEvents);
         HotkeyListener.Start();
         ApplyAll("startup");
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -96,6 +97,7 @@ public sealed class Controller
             Task.Run(async () =>
             {
                 await Task.Delay(3000);
+                Safe("enable BIOS key events", Clevo.EnableEvents);
                 Safe("hotkeys", HotkeyListener.Restart);
                 ApplyAll("resume");
             });
