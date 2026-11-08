@@ -643,7 +643,7 @@ public sealed class MainForm : Form
             _charge.Value = charge.Limit;
             _charge.Enabled = true;
             _chargeHint.Text = _c.FullChargeOnce
-                ? $"Back To {s.FullChargeRestore}% When Unplugged"
+                ? $"{s.FullChargeRestore}% After Unplug"
                 : ChargeText(charge.Limit, charge);
         }
         _fullCharge.Active = _c.FullChargeOnce;
@@ -654,10 +654,11 @@ public sealed class MainForm : Form
 
     private static string ChargeText(int stop, Charger.State state)
     {
-        if (stop >= 100) return "No Limit · Charges To 100%";
+        // Short: it shares the title row with the Full Charge Once button.
+        if (stop >= 100) return "No Limit";
         return state != null && state.Enabled && state.Stop == stop
-            ? $"Stop At {stop}% · Start Below {state.Start}%"
-            : $"Stop At {stop}%";
+            ? $"Stop {stop}% · Start {state.Start}%"
+            : $"Stop {stop}%";
     }
 
     /// <summary>Live readouts, G-Helper style: CPU/GPU temperature and fan in the section headers.</summary>
