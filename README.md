@@ -9,13 +9,13 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 
 <p align="center"><img width="420" alt="C-Helper" src="docs/screenshot.png" /></p>
 
-**[⬇️ Download the latest CHelper.exe](https://github.com/th4rv4/C-Helper/releases/latest/download/CHelper.exe)**
+**[⬇️ Download the installer](https://github.com/th4rv4/C-Helper/releases/latest)** (`CHelper-Setup-x.y.z.exe`), or the portable `CHelper.exe` from the same page.
 
 ## :gift: Advantages
 
 1. Everything the vendor Control Center does day to day, in one small window, plus things it never had (fan curves, keyboard effects, battery stats)
 2. Power mode and GPU mode are **independent**: Eco no longer depends on picking Power Saving
-3. Lightweight: a single exe, nothing to install, no services, no telemetry
+3. Lightweight: one self-contained exe (no .NET install needed), no services, no telemetry. Installer or portable, your choice
 4. Fn keys work **without** the vendor app: C-Helper reads them straight from the BIOS
 5. Simple, native UI with on-screen popups, modelled on G-Helper
 
@@ -106,24 +106,41 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 
 - **Colorful EVOL P15 23** (other Clevo / Insyde laptops with the same interface may work, but are untested)
 - The Clevo ACPI bridge driver (`CLEVO-acpibridge1.inf`), installed with the laptop drivers (it stays when the Control Center is removed)
-- `InsydeDCHU.dll`: on first run C-Helper copies it from the vendor **"Fn hot keys and OSD"** package into `%LOCALAPPDATA%\CHelper\dchu`. After that the vendor app can be uninstalled. You can also put the DLL next to `CHelper.exe`
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64)
+- `InsydeDCHU.dll`: on first run C-Helper copies it from the vendor **"Fn hot keys and OSD"** package into `%LOCALAPPDATA%\CHelper\dchu`. After that the vendor app can be uninstalled. Builds that include it (see [vendor/README.md](vendor/README.md)) need no vendor software at all
+- Windows 10 2004 or newer, 64-bit. Nothing else: the exe is self-contained (no .NET runtime to install)
 - Administrator rights (switching the GPU and the fans needs them). **Run on Startup** uses a scheduled task, so there is no UAC prompt at logon
 
 ## 📥 How to install
 
-1. Download `CHelper.exe` from [Releases](https://github.com/th4rv4/C-Helper/releases) and put it in a folder of your choice
-2. Run it once while the vendor Control Center is still installed, so it can copy `InsydeDCHU.dll`
-3. Turn on **Startup** in Options, and quit the vendor Control Center (or uninstall it)
+**Installer (recommended)**
+
+1. Download `CHelper-Setup-x.y.z.exe` from [Releases](https://github.com/th4rv4/C-Helper/releases) and run it
+2. Keep **Start C-Helper when I sign in** ticked
+3. Quit the vendor Control Center (or uninstall it once C-Helper has run once, if your build doesn't include the vendor files)
+
+The installer puts C-Helper in `Program Files`, adds a Start menu entry, sets up the sign-in task and, when the build includes them, the vendor DLL and the Clevo bridge driver. Uninstalling closes C-Helper cleanly first (fans handed back to the BIOS) and removes the task.
+
+**Portable**
+
+Download `CHelper.exe`, put it anywhere and run it. Turn on **Startup** in Options to start it at sign-in.
+
+`CHelper.exe --quit` closes a running copy cleanly (used by the installer).
 
 ## 🔨 Build
 
 ```powershell
+# optional: copy the vendor DLL and bridge driver from this laptop into vendor\
+powershell -ExecutionPolicy Bypass -File .\tools\export-vendor-files.ps1
+
 dotnet publish src/CHelper.csproj -c Release -o out
 # -> out\CHelper.exe
+
+# installer (Inno Setup 6)
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.8.0 installer\CHelper.iss
+# -> out\CHelper-Setup-0.8.0.exe
 ```
 
-Every push builds `CHelper.exe` with GitHub Actions. Pushing a tag like `v0.7.2` also publishes a release with the exe and its SHA-256.
+Every push builds the exe and the installer with GitHub Actions. Pushing a tag like `v0.8.0` also publishes a release with both and their SHA-256 checksums.
 
 ## 🔬 How it works
 
