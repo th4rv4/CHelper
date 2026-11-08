@@ -77,7 +77,15 @@ public sealed class FnKeys
                 break;
 
             case BiosEvents.TouchpadToggle:
+            case BiosEvents.TouchpadA:
+            case BiosEvents.TouchpadB:
+                // Treated as "toggle": ToggleTouchpad checks what Windows did and switches it if nothing changed,
+                // so the popup always shows the real state.
                 Task.Run(ToggleTouchpad);
+                break;
+
+            case BiosEvents.PowerModeKey:
+                CycleMode(+1);
                 break;
 
             case BiosEvents.KbColor:
@@ -128,8 +136,12 @@ public sealed class FnKeys
     /// The touchpad key only reports "toggled". Windows does the actual switching (Win+Ctrl+F24) and keeps the
     /// real state in the registry, so read it, toggle ourselves if nothing changed, and show the true state.
     /// </summary>
+    private readonly object _touchpadGate = new();
+
     private void ToggleTouchpad()
     {
+        // One press at a time: overlapping checks would see each other's change and skip a press.
+        lock (_touchpadGate)
         try
         {
             bool? before = Touchpad.IsEnabled();
@@ -205,6 +217,18 @@ public sealed class FnKeys
         int before = Settings.Current.KeyboardBrightness;
         Task.Run(() => _c.SetKeyboardBrightness(percent));
         _osd.ShowOsd(percent < before ? "backlight-down" : "backlight-up", percent == 0 ? "Keyboard Off" : "Keyboard", percent == 0 ? null : percent);
+    }
+
+    private static readonly PowerMode[] CycleOrder =
+        { PowerMode.Quiet, PowerMode.PowerSaving, PowerMode.Entertainment, PowerMode.Performance };
+
+    /// <summary>Step to the next (or previous) power mode with its popup (Fn+F4, Ctrl+Shift+F5). UI thread.</summary>
+    public void CycleMode(int step)
+    {
+        int i = Array.IndexOf(CycleOrder, _c.CurrentMode);
+        var next = CycleOrder[((i < 0 ? 0 : i) + step + CycleOrder.Length) % CycleOrder.Length];
+        Task.Run(() => _c.SetPowerMode(next));
+        ShowMode(next);
     }
 
     /// <summary>Popup for a power mode change made outside the window (tray menu).</summary>

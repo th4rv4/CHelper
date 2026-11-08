@@ -16,9 +16,6 @@ public sealed class TrayContext : ApplicationContext
     private GlobalHotkeys _hotkeys;
     private Instance.Window _instance;
 
-    private static readonly PowerMode[] CycleOrder =
-        { PowerMode.Quiet, PowerMode.PowerSaving, PowerMode.Entertainment, PowerMode.Performance };
-
     public TrayContext(bool startHidden)
     {
         _form = new MainForm();
@@ -160,13 +157,7 @@ public sealed class TrayContext : ApplicationContext
     }
 
     /// <summary>Step to the next (or previous) power mode and show its popup. Runs on the UI thread.</summary>
-    private void CycleMode(int step)
-    {
-        int i = Array.IndexOf(CycleOrder, _c.CurrentMode);
-        var next = CycleOrder[((i < 0 ? 0 : i) + step + CycleOrder.Length) % CycleOrder.Length];
-        Task.Run(() => _c.SetPowerMode(next));
-        _fnKeys.ShowMode(next);
-    }
+    private void CycleMode(int step) => _fnKeys.CycleMode(step);
 
     private void Quit()
     {

@@ -38,6 +38,9 @@ Writes that carry a sub-command pack the value in the low bytes and the sub-comm
 | Enable key events | Write `0x46`, value 0 | BIOS only sends Fn key events after this; forgotten on sleep, so send at startup and on resume (same as Linux `CLEVO_CMD_SET_EVENTS_ENABLED`) | confirmed |
 | Lock state events | Hotkey events `0xC7` / `0xC8` | Num Lock off / on (sent with every press) | confirmed |
 | | Hotkey events `0xC9` / `0xCA` | Caps Lock off / on | confirmed |
+| Touchpad key | Hotkey events `0xFC` / `0xFD` (alternating) | with 0x46 events on, Fn+F1 only reports; the app toggles the touchpad (Win+Ctrl+F24). `0x5D` was sent while the vendor app had set up the BIOS | confirmed |
+| Fn+F4 | Hotkey event `0xFB` | no BIOS action; C-Helper cycles the power mode | confirmed |
+| Charger | Hotkey event `0xF0` | charger connected (ignored) | seen |
 | Keyboard backlight timeout | Write `0x79`, sub `0x18` | value = seconds << 8 \| 0xFF; 0 = never (vendor default 30 s) | from vendor code |
 | CPU fan / temp | Read `0x63` | byte0 = duty 0–255, byte2 = °C | confirmed |
 | GPU fan / temp | Read `0x64` | byte0 = duty 0–255, byte2 = °C (meaningless while dGPU is off) | confirmed |

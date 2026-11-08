@@ -29,6 +29,16 @@ public static class BiosEvents
     public const int CameraOn = 0xF7;
 
     /// <summary>The BIOS reports the new lock state with every Num / Caps Lock press (confirmed on the laptop).</summary>
+    /// <summary>
+    /// With key events enabled (cmd 0x46) Fn+F1 reports these, alternating per press, and leaves switching the
+    /// touchpad to the app. (0x5D is what it sent while the vendor app had set up the BIOS.)
+    /// </summary>
+    public const int TouchpadA = 0xFC;
+    public const int TouchpadB = 0xFD;
+
+    /// <summary>Fn+F4: next power mode.</summary>
+    public const int PowerModeKey = 0xFB;
+
     public const int NumLockOff = 0xC7;
     public const int NumLockOn = 0xC8;
     public const int CapsLockOff = 0xC9;
