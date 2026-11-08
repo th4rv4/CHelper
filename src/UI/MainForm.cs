@@ -23,6 +23,7 @@ public sealed class MainForm : Form
     private Font _fBody, _fSmall, _fHead, _fBig;
     private Label _stats, _modeHint, _gpuHint, _fanHint, _screenHint, _kbHint, _chargeHint;
     private Label _batCharge, _batRateLabel, _batRate, _batHealth;
+    private TileButton _fullCharge;
     private StepSlider _charge;
     private SegRow _modes, _gpu, _fans, _screen, _options, _kbEffects, _kbSpeed;
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
@@ -243,6 +244,25 @@ public sealed class MainForm : Form
         _options.ButtonClicked += OnOptionClicked;
 
         _chargeHint = Section("battery-saver", "Battery Charge Limit");
+        // Full Charge Once at the right end of the title row; the hint moves to its left.
+        const int fullW = 150;
+        _chargeHint.Width = S(ContentWidth - 200 - fullW - 10);
+        _fullCharge = new TileButton
+        {
+            Text = "Full Charge Once",
+            Vertical = false,
+            Font = _fSmall,
+            Accent = Theme.Accent,
+            Location = new Point(S(Pad + ContentWidth - fullW), S(_y - 28 - 3)),
+            Size = new Size(S(fullW), S(26)),
+        };
+        _fullCharge.Click += (_, _) => Run(() =>
+        {
+            if (_c.FullChargeOnce) _c.CancelFullChargeOnce("cancelled");
+            else _c.StartFullChargeOnce();
+        });
+        _tips.SetToolTip(_fullCharge, "Charge to 100% this time. Your charge limit comes back by itself when you unplug.");
+        Controls.Add(_fullCharge);
         _charge = new StepSlider
         {
             Location = new Point(S(Pad), S(_y - 4)),
@@ -622,8 +642,12 @@ public sealed class MainForm : Form
             _charge.Values = Charger.SliderStops(charge);
             _charge.Value = charge.Limit;
             _charge.Enabled = true;
-            _chargeHint.Text = ChargeText(charge.Limit, charge);
+            _chargeHint.Text = _c.FullChargeOnce
+                ? $"Back To {s.FullChargeRestore}% When Unplugged"
+                : ChargeText(charge.Limit, charge);
         }
+        _fullCharge.Active = _c.FullChargeOnce;
+        _fullCharge.Text = _c.FullChargeOnce ? "Charging To 100%" : "Full Charge Once";
 
         UpdateStats();
     }

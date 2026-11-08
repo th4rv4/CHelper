@@ -59,6 +59,7 @@ public sealed class Controller
 
         DgpuPresent = Gpu.IsDgpuPresent();
         Safe("charger read", () => Charge = Charger.Read());
+        CheckFullChargeOnce(); // unplugged while C-Helper wasn't running
         VendorHotkey.SetEnabled(S.FnEscOpensHelper);
         Safe("enable BIOS key events", Clevo.EnableEvents);
         HotkeyListener.Start();
@@ -134,6 +135,7 @@ public sealed class Controller
         Safe("power mode", () => ApplyPowerMode());
         Safe("gpu", () => ApplyGpu());
         Safe("screen", () => ApplyScreen());
+        CheckFullChargeOnce();
         Safe("keyboard", () =>
         {
             Clevo.SetKeyboardTimeout(KeyboardTimeoutNow);
@@ -464,7 +466,47 @@ public sealed class Controller
 
     // ---------------- Battery ----------------
 
+    /// <summary>One-time charge to 100 %; the previous limit comes back when the charger is removed.</summary>
+    public bool FullChargeOnce => S.FullChargeRestore > 0;
+
+    public void StartFullChargeOnce()
+    {
+        int previous = (Charge ?? Charger.Read()).Limit;
+        if (previous >= 100) return; // no limit set, nothing to do
+        S.FullChargeRestore = previous;
+        Settings.Save();
+        Log.Info($"Full charge once: charging to 100%, limit {previous}% comes back after unplugging");
+        WriteChargeLimit(100);
+    }
+
+    public void CancelFullChargeOnce(string reason)
+    {
+        int restore = S.FullChargeRestore;
+        if (restore <= 0) return;
+        S.FullChargeRestore = 0;
+        Settings.Save();
+        Log.Info($"Full charge once ended ({reason}), limit back to {restore}%");
+        WriteChargeLimit(restore);
+    }
+
+    /// <summary>Unplugged (or started on battery) after a full charge: put the limit back.</summary>
+    private void CheckFullChargeOnce()
+    {
+        if (FullChargeOnce && !OnAC) CancelFullChargeOnce("unplugged");
+    }
+
+    /// <summary>Limit chosen on the slider; also ends a pending Full Charge Once.</summary>
     public void SetChargeLimit(int stop)
+    {
+        if (S.FullChargeRestore > 0)
+        {
+            S.FullChargeRestore = 0;
+            Settings.Save();
+        }
+        WriteChargeLimit(stop);
+    }
+
+    private void WriteChargeLimit(int stop)
     {
         Safe("charge limit", () =>
         {

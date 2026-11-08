@@ -27,7 +27,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 4. Screen refresh rate control
 5. **Keyboard lighting**: colour, brightness slider and effects (Static, Breathing, Color Cycle, CPU Heat)
 6. Keyboard backlight timer, separate for plugged in and on battery
-7. **Battery charge limit** (60–100 %), charge, charging / discharging watts and battery health
+7. **Battery charge limit** (60–100 %) with **Full Charge Once** for trips, charge, charging / discharging watts and battery health
 8. Live CPU / GPU temperature and fan speed
 9. On-screen popups for Fn keys, Caps / Num / Scroll Lock, camera, touchpad and mode changes
 10. Each power mode also sets the matching **Windows power mode**
@@ -39,6 +39,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 - **Optimized** GPU mode: dGPU off on battery (Eco), on when plugged in (Standard)
 - **Auto** refresh rate: highest on charger, 60 Hz (or the lowest rate) on battery
 - Keyboard backlight timer for charger and battery
+- **Full Charge Once**: charges to 100 % this time; the charge limit comes back by itself when you unplug
 - Settings are re-applied after sleep and when the charger is connected or removed
 
 ### :rocket: Power Modes

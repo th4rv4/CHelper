@@ -43,6 +43,9 @@ public sealed class AppSettings
 
     /// <summary>Fn+Esc opens C-Helper instead of the vendor Control Center.</summary>
     public bool FnEscOpensHelper { get; set; } = true;
+
+    /// <summary>Full Charge Once: the charge limit to put back after unplugging (0 = not active).</summary>
+    public int FullChargeRestore { get; set; }
 }
 
 public static class Settings
