@@ -96,6 +96,7 @@ public sealed class Controller
             Task.Run(async () =>
             {
                 await Task.Delay(3000);
+                Safe("hotkeys", HotkeyListener.Restart);
                 ApplyAll("resume");
             });
         }

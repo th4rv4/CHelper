@@ -35,6 +35,20 @@ public static class HotkeyListener
 
     public static void Shutdown() => Stop.Set();
 
+    /// <summary>
+    /// Reconnect to the BIOS key channel. After sleep the event handle registered with the bridge driver no longer
+    /// fires, so key presses silently stop arriving until we register again.
+    /// </summary>
+    public static void Restart()
+    {
+        var old = _thread;
+        Stop.Set();
+        old?.Join(2000);
+        _thread = null;
+        Log.Info("Hotkeys: reconnecting");
+        Start();
+    }
+
     private static void Loop()
     {
         string path = FindDevicePath() ?? FallbackPath;
@@ -43,7 +57,7 @@ public static class HotkeyListener
         if (device.IsInvalid)
         {
             Log.Error($"Hotkeys: cannot open {path} (error {Marshal.GetLastWin32Error()})");
-            _thread = null;
+            if (_thread == Thread.CurrentThread) _thread = null;
             return;
         }
 
@@ -56,7 +70,7 @@ public static class HotkeyListener
             if (!DeviceIoControl(device, IoctlRegister, reg, IntPtr.Size, IntPtr.Zero, 0, out _, IntPtr.Zero))
             {
                 Log.Error($"Hotkeys: register failed (error {Marshal.GetLastWin32Error()})");
-                _thread = null;
+                if (_thread == Thread.CurrentThread) _thread = null;
                 return;
             }
             Log.Info($"Hotkeys: listening on {path}");
@@ -85,7 +99,7 @@ public static class HotkeyListener
         {
             Marshal.FreeHGlobal(reg);
             Marshal.FreeHGlobal(outBuf);
-            _thread = null;
+            if (_thread == Thread.CurrentThread) _thread = null;
         }
     }
 
