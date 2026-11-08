@@ -7,7 +7,9 @@
 #   powershell -ExecutionPolicy Bypass -File .\tools\export-vendor-files.ps1
 
 $ErrorActionPreference = 'Stop'
+# Inside the repo (tools\) write to the repo's vendor\; run on its own, write next to the script.
 $repo = Split-Path $PSScriptRoot -Parent
+if (-not $repo -or -not (Test-Path (Join-Path $repo 'src\CHelper.csproj'))) { $repo = $PSScriptRoot }
 $vendor = Join-Path $repo 'vendor'
 New-Item -ItemType Directory -Force $vendor | Out-Null
 
@@ -42,5 +44,5 @@ if ($drv -and $drv.InfName) {
 }
 
 Write-Host "`nvendor\ now contains:"
-Get-ChildItem $vendor -Recurse -File | ForEach-Object { Write-Host ("  {0}  {1:N0} bytes" -f $_.FullName.Substring($repo.Length + 1), $_.Length) }
+Get-ChildItem $vendor -Recurse -File | ForEach-Object { Write-Host ("  {0}  {1:N0} bytes" -f $_.FullName, $_.Length) }
 Write-Host "`nNext: git add vendor && git commit -m ""Bundle vendor files""  (or build locally without committing)"
