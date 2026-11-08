@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "VERSION_ARG=-p:Version=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish single exe
+        run: dotnet publish src/CHelper.csproj -c Release -o out ${{ env.VERSION_ARG }}
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash out/CHelper.exe -Algorithm SHA256).Hash
+          "$hash  CHelper.exe" | Out-File out/CHelper.exe.sha256 -Encoding ascii
+          Write-Host "SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CHelper
+          path: |
+            out/CHelper.exe
+            out/CHelper.exe.sha256
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/CHelper.exe
+            out/CHelper.exe.sha256
+          generate_release_notes: true
