@@ -215,7 +215,10 @@ public sealed class Controller
             int cpuT = cpu.Temp;
             // With the dGPU off its sensor reads junk; the GPU fan then follows the CPU temperature.
             int gpuT = DgpuPresent || InUltimate ? gpu.Temp : cpuT;
-            if (cpuT <= 0 || cpuT > 125)
+            // Right after resume the EC reports junk (seen: 1 °C). A laptop CPU is never below 20 °C here,
+            // so treat anything outside 20-125 °C as "no reading" rather than "cold".
+            if (gpuT < 20 || gpuT > 125) gpuT = cpuT;
+            if (cpuT < 20 || cpuT > 125)
             {
                 // Bad reading: don't guess, let the EC drive the fans until the next tick.
                 Clevo.SetFanAuto();
