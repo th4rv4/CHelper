@@ -27,4 +27,10 @@ public static class BiosEvents
     /// <summary>Fn + camera key: the EC switches the camera and reports the new state.</summary>
     public const int CameraOff = 0xF6;
     public const int CameraOn = 0xF7;
+
+    /// <summary>The BIOS reports the new lock state with every Num / Caps Lock press (confirmed on the laptop).</summary>
+    public const int NumLockOff = 0xC7;
+    public const int NumLockOn = 0xC8;
+    public const int CapsLockOff = 0xC9;
+    public const int CapsLockOn = 0xCA;
 }

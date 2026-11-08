@@ -59,6 +59,16 @@ public sealed class FnKeys
                 }
                 break;
 
+            case BiosEvents.NumLockOn:
+            case BiosEvents.NumLockOff:
+                ShowLockFromBios(Keys.NumLock, code == BiosEvents.NumLockOn);
+                break;
+
+            case BiosEvents.CapsLockOn:
+            case BiosEvents.CapsLockOff:
+                ShowLockFromBios(Keys.CapsLock, code == BiosEvents.CapsLockOn);
+                break;
+
             case BiosEvents.CameraOff:
             case BiosEvents.CameraOn:
                 bool camOn = code == BiosEvents.CameraOn;
@@ -148,7 +158,8 @@ public sealed class FnKeys
     public void ShowLock(Keys key)
     {
         // The hook fires before Windows flips the toggle, so read the state a moment later.
-        var t = new System.Windows.Forms.Timer { Interval = 80 };
+        // Num / Caps Lock wait a little longer so the BIOS notice (exact state) usually arrives first.
+        var t = new System.Windows.Forms.Timer { Interval = key is Keys.NumLock or Keys.CapsLock ? 150 : 80 };
         t.Tick += (_, _) =>
         {
             t.Stop();
@@ -158,10 +169,26 @@ public sealed class FnKeys
         t.Start();
     }
 
+    // When the BIOS reported a lock change, trust it over Windows (whose state reading lags on fast presses).
+    private readonly Dictionary<Keys, DateTime> _biosLock = new();
+
+    private void ShowLockFromBios(Keys key, bool on)
+    {
+        _biosLock[key] = DateTime.UtcNow;
+        ShowLockPopup(key, on);
+    }
+
     private void ShowLockState(Keys key)
     {
+        // Num / Caps Lock: the BIOS notice (same press) already showed the right state.
+        if (_biosLock.TryGetValue(key, out var at) && DateTime.UtcNow - at < TimeSpan.FromSeconds(1)) return;
         bool on = Control.IsKeyLocked(key);
-        Log.Info($"{key} is now {(on ? "on" : "off")}");
+        Log.Info($"{key} is now {(on ? "on" : "off")} (from Windows)");
+        ShowLockPopup(key, on);
+    }
+
+    private void ShowLockPopup(Keys key, bool on)
+    {
         var (icon, title) = key switch
         {
             Keys.CapsLock => ("capslock", "Caps Lock"),
