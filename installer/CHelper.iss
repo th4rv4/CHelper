@@ -70,7 +70,9 @@ Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\driver\*.inf"" /
 Filename: "{sys}\schtasks.exe"; \
   Parameters: "/create /f /tn ""C-Helper"" /tr ""\""{app}\{#AppExe}\"" --tray"" /sc onlogon /rl highest /delay 0000:10"; \
   Flags: runhidden waituntilterminated; Tasks: startup
-Filename: "{app}\{#AppExe}"; Description: "Launch C-Helper"; Flags: nowait postinstall skipifsilent
+; runascurrentuser: Setup is already elevated; C-Helper's manifest requires admin, so launching it as the
+; original (non-admin) user fails with error 740
+Filename: "{app}\{#AppExe}"; Description: "Launch C-Helper"; Flags: nowait postinstall skipifsilent runascurrentuser
 
 [UninstallRun]
 ; Quit cleanly first so the fans are handed back to the BIOS
