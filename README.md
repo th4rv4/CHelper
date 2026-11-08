@@ -139,11 +139,11 @@ dotnet publish src/CHelper.csproj -c Release -o out
 # -> out\CHelper.exe
 
 # installer (Inno Setup 6)
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.9.5 installer\CHelper.iss
-# -> out\CHelper-Setup-0.9.5.exe
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.9.6 installer\CHelper.iss
+# -> out\CHelper-Setup-0.9.6.exe
 ```
 
-Every push builds the exe and the installer with GitHub Actions. Pushing a tag like `v0.9.5` also publishes a release with both and their SHA-256 checksums.
+Every push builds the exe and the installer with GitHub Actions. Pushing a tag like `v0.9.6` also publishes a release with both and their SHA-256 checksums.
 
 ## 🔬 How it works
 
