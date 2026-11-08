@@ -7,3 +7,6 @@
 *.yml text eol=lf
 *.png binary
 *.ico binary
+
+# Vendor files are signed (the driver catalog covers the .inf bytes): store them exactly as they are
+vendor/** -text
