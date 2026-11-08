@@ -2,14 +2,14 @@
 
 Small and lightweight alternative to the vendor **Control Center** for the **Colorful EVOL P15 23** (Clevo / Insyde chassis), inspired by [G-Helper](https://github.com/seerge/g-helper). One portable `.exe`, a tray icon and a compact window: power modes, GPU modes, fan curves, keyboard lighting, battery charge limit and Fn keys, without the vendor app running in the background.
 
-[![Build](https://github.com/th4rv4/C-Helper/actions/workflows/build.yml/badge.svg)](https://github.com/th4rv4/C-Helper/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/th4rv4/C-Helper)](https://github.com/th4rv4/C-Helper/releases)
-[![Downloads](https://img.shields.io/github/downloads/th4rv4/C-Helper/total)](https://github.com/th4rv4/C-Helper/releases)
+[![Build](https://github.com/th4rv4/CHelper/actions/workflows/build.yml/badge.svg)](https://github.com/th4rv4/CHelper/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/th4rv4/CHelper)](https://github.com/th4rv4/CHelper/releases)
+[![Downloads](https://img.shields.io/github/downloads/th4rv4/CHelper/total)](https://github.com/th4rv4/CHelper/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 <p align="center"><img width="420" alt="C-Helper" src="docs/screenshot.png" /></p>
 
-**[⬇️ Download the installer](https://github.com/th4rv4/C-Helper/releases/latest)** (`CHelper-Setup-x.y.z.exe`), or the portable `CHelper.exe` from the same page.
+**[⬇️ Download the installer](https://github.com/th4rv4/CHelper/releases/latest)** (`CHelper-Setup-x.y.z.exe`), or the portable `CHelper.exe` from the same page.
 
 ## :gift: Advantages
 
@@ -115,7 +115,7 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 
 **Installer (recommended)**
 
-1. Download `CHelper-Setup-x.y.z.exe` from [Releases](https://github.com/th4rv4/C-Helper/releases) and run it
+1. Download `CHelper-Setup-x.y.z.exe` from [Releases](https://github.com/th4rv4/CHelper/releases) and run it
 2. Keep **Start C-Helper when I sign in** ticked
 3. Quit the vendor Control Center (or uninstall it once C-Helper has run once, if your build doesn't include the vendor files)
 

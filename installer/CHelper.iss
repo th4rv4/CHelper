@@ -13,7 +13,7 @@
 #define AppName "C-Helper"
 #define AppExe "CHelper.exe"
 #define AppPublisher "th4rv4"
-#define AppUrl "https://github.com/th4rv4/C-Helper"
+#define AppUrl "https://github.com/th4rv4/CHelper"
 #define Root ".."
 
 [Setup]
