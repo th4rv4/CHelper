@@ -73,6 +73,8 @@ Filename: "{sys}\schtasks.exe"; \
 ; runascurrentuser: Setup is already elevated; C-Helper's manifest requires admin, so launching it as the
 ; original (non-admin) user fails with error 740
 Filename: "{app}\{#AppExe}"; Description: "Launch C-Helper"; Flags: nowait postinstall skipifsilent runascurrentuser
+; In-app update (Setup /SILENT /UPDATE): start the new version again once the files are in place
+Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: IsUpdate
 
 [UninstallRun]
 ; Quit cleanly first so the fans are handed back to the BIOS
@@ -144,6 +146,17 @@ begin
   Exe := ExpandConstant('{app}\{#AppExe}');
   if FileExists(Exe) then
     Exec(Exe, '--quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+// Started by C-Helper's own updater ("/UPDATE"): Inno Setup ignores switches it doesn't know.
+function IsUpdate(): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/UPDATE') = 0 then
+      Result := True;
 end;
 
 // Install the bundled bridge driver only when it is included and the ACPI\CLV0001 device has no working driver.
