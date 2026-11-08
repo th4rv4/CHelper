@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CHelper.Hardware;
+using CHelper.Native;
 
 namespace CHelper.UI;
 
@@ -75,6 +76,11 @@ public sealed class MainForm : Form
             });
         };
         _poll.Start();
+        _trim.Tick += (_, _) =>
+        {
+            _trim.Stop();
+            if (!Visible) Task.Run(() => Memory.Trim("hidden"));
+        };
         Task.Run(() =>
         {
             _startupEnabled = Startup.IsEnabled();
@@ -126,10 +132,19 @@ public sealed class MainForm : Form
         base.OnFormClosing(e);
     }
 
+    // Hidden to the tray: give memory back to Windows shortly after (if it stays hidden).
+    private readonly System.Windows.Forms.Timer _trim = new() { Interval = 1500 };
+
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (!Visible) return;
+        if (!Visible)
+        {
+            _trim.Stop();
+            _trim.Start();
+            return;
+        }
+        _trim.Stop();
         RefreshState();
         Task.Run(() => _c.RefreshSensors());
     }

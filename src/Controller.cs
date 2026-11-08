@@ -60,7 +60,6 @@ public sealed class Controller
         DgpuPresent = Gpu.IsDgpuPresent();
         Safe("charger read", () => Charge = Charger.Read());
         CheckFullChargeOnce(); // unplugged while C-Helper wasn't running
-        VendorHotkey.SetEnabled(S.FnEscOpensHelper);
         Safe("enable BIOS key events", Clevo.EnableEvents);
         HotkeyListener.Start();
         ApplyAll("startup");
@@ -524,7 +523,6 @@ public sealed class Controller
     {
         S.FnEscOpensHelper = on;
         Settings.Save();
-        VendorHotkey.SetEnabled(on);
         Changed();
     }
 

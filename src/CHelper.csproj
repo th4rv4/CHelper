@@ -17,6 +17,9 @@
     <PlatformTarget>x64</PlatformTarget>
     <!-- Framework-dependent: small exe, needs the .NET 8 Desktop Runtime (the installer adds it if missing) -->
     <SelfContained>false</SelfContained>
+    <!-- Lower memory in the background: no ICU culture data (English-only UI), no background GC thread -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
@@ -31,7 +34,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
-    <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

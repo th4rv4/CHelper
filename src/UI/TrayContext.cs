@@ -61,8 +61,6 @@ public sealed class TrayContext : ApplicationContext
             _form.BeginInvoke(new Action(UpdateTrayText));
         };
 
-        VendorHotkey.OpenRequested += ShowFromHotkey;
-
         // Fn keys straight from the BIOS (works without any vendor software)
         LockKeys.Toggled += key => _fnKeys.ShowLock(key);
         LockKeys.Start();
@@ -83,13 +81,18 @@ public sealed class TrayContext : ApplicationContext
         };
 
         if (!startHidden) _form.ShowNearTray();
-    }
-
-    /// <summary>Fallback for when the vendor app launches CC40; the BIOS listener handles Fn+Esc itself.</summary>
-    private void ShowFromHotkey()
-    {
-        if (HotkeyListener.Running || _form.IsDisposed) return;
-        _form.BeginInvoke(new Action(_form.ShowNearTray));
+        else
+        {
+            // Started hidden at sign-in: trim once start-up work (hardware reads, first apply) is done.
+            var once = new System.Windows.Forms.Timer { Interval = 15000 };
+            once.Tick += (_, _) =>
+            {
+                once.Stop();
+                once.Dispose();
+                if (!_form.Visible) Task.Run(() => Memory.Trim("startup"));
+            };
+            once.Start();
+        }
     }
 
     private void Toggle()
