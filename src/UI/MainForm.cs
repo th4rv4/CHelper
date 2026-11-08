@@ -176,8 +176,8 @@ public sealed class MainForm : Form
         _modes = Row(66, true, 26,
             new("Quiet", "moon", Theme.Eco),
             new("Power Saving", "leaf", Theme.Eco),
-            new("Entertainment", "controller", Theme.Standard),
-            new("Performance", "turbo", Theme.Turbo));
+            new("Balanced", "controller", Theme.Standard),
+            new("Turbo", "turbo", Theme.Turbo));
         _modes.ButtonClicked += i => Run(() => _c.SetPowerMode(ModeOrder[i]));
 
         _gpuHint = Section("gpu", "GPU Mode");
@@ -606,7 +606,7 @@ public sealed class MainForm : Form
         BeginInvoke(new Action(RefreshState));
     }
 
-    private static string ModeName(PowerMode m) => m == PowerMode.PowerSaving ? "Power Saving" : m.ToString();
+    private static string ModeName(PowerMode m) => m.DisplayName();
 
     private void RefreshState()
     {

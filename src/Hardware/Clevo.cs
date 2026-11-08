@@ -12,6 +12,18 @@ public enum PowerMode
 }
 
 /// <summary>Fan mode (cmd 0x79, sub 0x01). Values from the vendor Control Center fan buttons.</summary>
+/// <summary>Names shown in the UI. The BIOS profiles are still Entertainment / Performance underneath.</summary>
+public static class PowerModeNames
+{
+    public static string DisplayName(this PowerMode mode) => mode switch
+    {
+        PowerMode.PowerSaving => "Power Saving",
+        PowerMode.Entertainment => "Balanced",
+        PowerMode.Performance => "Turbo",
+        _ => mode.ToString(),
+    };
+}
+
 public enum FanMode
 {
     Automatic = 0,

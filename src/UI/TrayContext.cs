@@ -108,8 +108,8 @@ public sealed class TrayContext : ApplicationContext
         {
             ("Quiet", PowerMode.Quiet),
             ("Power Saving", PowerMode.PowerSaving),
-            ("Entertainment", PowerMode.Entertainment),
-            ("Performance", PowerMode.Performance),
+            ("Balanced", PowerMode.Entertainment),
+            ("Turbo", PowerMode.Performance),
         };
         foreach (var (text, mode) in modes)
         {
@@ -154,7 +154,7 @@ public sealed class TrayContext : ApplicationContext
 
     private void UpdateTrayText()
     {
-        string mode = _c.CurrentMode == PowerMode.PowerSaving ? "Power Saving" : _c.CurrentMode.ToString();
+        string mode = _c.CurrentMode.DisplayName();
         string gpu = _c.InUltimate ? "dGPU Only" : _c.DgpuPresent ? "dGPU On" : "dGPU Off";
         _tray.Text = $"C-Helper · {mode} · {gpu}";
     }

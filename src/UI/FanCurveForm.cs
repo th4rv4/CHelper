@@ -88,7 +88,7 @@ public sealed class FanCurveForm : Form
         });
         _modes = new SegRow(S(34), S(8), fBody, false, 16,
             new("Quiet", "moon", Theme.Eco), new("Power Saving", "leaf", Theme.Eco),
-            new("Entertainment", "controller", Theme.Standard), new("Performance", "turbo", Theme.Turbo))
+            new("Balanced", "controller", Theme.Standard), new("Turbo", "turbo", Theme.Turbo))
         {
             Location = new Point(S(Pad + 92), S(y)),
             Width = S(ContentWidth - 92),
@@ -210,7 +210,7 @@ public sealed class FanCurveForm : Form
         return (chart, now);
     }
 
-    private static string ModeName(PowerMode m) => m == PowerMode.PowerSaving ? "Power Saving" : m.ToString();
+    private static string ModeName(PowerMode m) => m.DisplayName();
 
     /// <summary>Switch the editor to another mode's curves (edits to the previous mode are kept).</summary>
     private void ShowMode(PowerMode mode)

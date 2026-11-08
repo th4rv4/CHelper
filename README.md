@@ -21,7 +21,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 
 ### :zap: Features
 
-1. Power modes: **Quiet** · **Power Saving** · **Entertainment** · **Performance** (the BIOS profiles, with default fan behaviour)
+1. Power modes: **Quiet** · **Power Saving** · **Balanced** · **Turbo** (the BIOS profiles, with default fan behaviour)
 2. GPU modes: **Eco** · **Standard** · **Optimized** · **dGPU Only**
 3. Custom **fan curves** for CPU and GPU, per power mode, with presets
 4. Screen refresh rate control
@@ -51,8 +51,8 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 |---|---|---|---|
 | **Quiet** | Quiet | Noiseless curve | Best Power Efficiency |
 | **Power Saving** | Power Saving | BIOS default | Best Power Efficiency |
-| **Entertainment** | Entertainment | BIOS default | Balanced |
-| **Performance** | Performance | BIOS default | Best Performance |
+| **Balanced** | Entertainment | BIOS default | Balanced |
+| **Turbo** | Performance | BIOS default | Best Performance |
 
 ### 💻 GPU Modes
 

@@ -238,8 +238,8 @@ public sealed class FnKeys
         {
             PowerMode.Quiet => ("moon", "Quiet"),
             PowerMode.PowerSaving => ("leaf", "Power Saving"),
-            PowerMode.Entertainment => ("controller", "Entertainment"),
-            _ => ("turbo", "Performance"),
+            PowerMode.Entertainment => ("controller", "Balanced"),
+            _ => ("turbo", "Turbo"),
         };
         _osd.ShowOsd(icon, name);
     }
