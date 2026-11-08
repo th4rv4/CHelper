@@ -6,6 +6,9 @@ public enum KbEffect { Static, Breathing, ColorCycle, CpuHeat }
 
 public enum KbSpeed { Slow, Normal, Fast }
 
+/// <summary>What the Heat effect follows (KbEffect.CpuHeat is shown as "Heat").</summary>
+public enum HeatSource { Cpu, Gpu, Hottest }
+
 /// <summary>
 /// Software lighting effects for the single-zone keyboard. The EC only takes a colour and a brightness,
 /// so C-Helper animates them itself (~30 updates per second, unlogged).
@@ -25,8 +28,17 @@ public sealed class KeyboardEffects
     private int _brightness;   // 0-100, peak for Breathing
     private int _timeout;      // seconds, 0 = never
 
-    /// <summary>Latest CPU temperature seen by CPU Heat.</summary>
+    /// <summary>Latest CPU temperature seen by Heat.</summary>
     public int CpuTemp { get; private set; }
+
+    /// <summary>Temperature source for Heat. Read every second by the effect loop.</summary>
+    public HeatSource Source { get; set; } = HeatSource.Hottest;
+
+    /// <summary>Whether the dGPU is powered (its sensor reads junk in Eco). Set by the controller.</summary>
+    public Func<bool> GpuOn { get; set; } = () => true;
+
+    /// <summary>What Heat is showing, e.g. "GPU 74°C", for the window hint.</summary>
+    public string HeatLabel { get; private set; } = "";
 
     /// <summary>Colour currently shown (for the CPU Heat swatch / popup).</summary>
     public Color CurrentColor { get; private set; }
@@ -166,8 +178,8 @@ public sealed class KeyboardEffects
                             if (clock.ElapsedMilliseconds - lastHeat >= 1000 || lastRgb == -1)
                             {
                                 lastHeat = clock.ElapsedMilliseconds;
-                                CpuTemp = Clevo.ReadCpuFan().Temp; // read here: the window's sensor poll stops when hidden
-                                var c = HeatColor(CpuTemp);
+                                // Read here: the window's sensor poll stops when it is hidden.
+                                var c = HeatFromSensors();
                                 if (lastRaw != peak)
                                 {
                                     Clevo.SetKeyboardBrightnessRaw(peak);
@@ -195,12 +207,45 @@ public sealed class KeyboardEffects
         }
     }
 
-    /// <summary>Green below 45 °C, yellow around 65 °C, red from 85 °C.</summary>
-    public static Color HeatColor(int temp)
+    /// <summary>CPU scale: green below 45 °C, yellow around 65 °C, red from 85 °C.</summary>
+    public static Color HeatColor(int temp) => HeatColor(CpuFraction(temp));
+
+    /// <summary>0 = green, 1 = red.</summary>
+    public static Color HeatColor(double fraction) => FromHue(120 * (1 - Math.Clamp(fraction, 0, 1)));
+
+    private static double CpuFraction(int temp) => (temp - 45) / 40.0;
+
+    /// <summary>GPU scale: green below 40 °C, red from 80 °C (the RTX 4060 Laptop throttles around 87 °C).</summary>
+    private static double GpuFraction(int temp) => (temp - 40) / 40.0;
+
+    private static bool Valid(int temp) => temp >= 20 && temp <= 125;
+
+    /// <summary>
+    /// Colour for the chosen source. Each chip is judged on its own scale, so Hottest shows whichever is closer
+    /// to its limit. A GPU that is off (Eco) or reading junk falls back to the CPU.
+    /// </summary>
+    private Color HeatFromSensors()
     {
-        double t = Math.Clamp((temp - 45) / 40.0, 0, 1);
-        // hue 120 (green) -> 0 (red)
-        return FromHue(120 * (1 - t));
+        int cpu = Clevo.ReadCpuFan().Temp;
+        CpuTemp = cpu;
+        int gpu = -1;
+        if (Source != HeatSource.Cpu && GpuOn())
+        {
+            int t = Clevo.ReadGpuFan().Temp;
+            if (Valid(t)) gpu = t;
+        }
+
+        double cpuF = Valid(cpu) ? CpuFraction(cpu) : 0;
+        double gpuF = gpu > 0 ? GpuFraction(gpu) : -1;
+
+        bool useGpu = Source switch
+        {
+            HeatSource.Gpu => gpu > 0,
+            HeatSource.Hottest => gpu > 0 && gpuF > cpuF,
+            _ => false,
+        };
+        HeatLabel = useGpu ? $"GPU {gpu}°C" : Valid(cpu) ? $"CPU {cpu}°C" : "";
+        return HeatColor(useGpu ? gpuF : cpuF);
     }
 
     public static Color FromHue(double hue)

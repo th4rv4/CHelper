@@ -33,6 +33,8 @@ public sealed class MainForm : Form
 
     private static readonly KbEffect[] EffectOrder = { KbEffect.Static, KbEffect.Breathing, KbEffect.ColorCycle, KbEffect.CpuHeat };
     private static readonly KbSpeed[] SpeedOrder = { KbSpeed.Slow, KbSpeed.Normal, KbSpeed.Fast };
+    private static readonly HeatSource[] HeatOrder = { HeatSource.Cpu, HeatSource.Gpu, HeatSource.Hottest };
+    private Label _kbSpeedLabel;
     private static readonly int[] TimeoutSteps = { 0, 15, 30, 60, 300 };
     private static readonly Color[] Rainbow =
         { Color.Red, Color.Yellow, Color.Lime, Color.Cyan, Color.Blue, Color.Magenta, Color.Red };
@@ -201,7 +203,7 @@ public sealed class MainForm : Form
         _kbHint = Section("keyboard", "Keyboard Lighting");
         _kbEffects = Row(38, false, 16,
             new("Static", "fx-static"), new("Breathing", "fx-breathing"),
-            new("Color Cycle", "fx-cycle"), new("CPU Heat", "fx-heat"));
+            new("Color Cycle", "fx-cycle"), new("Heat", "fx-heat"));
         _kbEffects.ButtonClicked += i => Run(() => _c.SetKeyboardEffect(EffectOrder[i]));
         _y -= 4;
 
@@ -234,20 +236,26 @@ public sealed class MainForm : Form
 
         // Speed (animated effects) and the backlight timer (plugged in / on battery) on one line
         const int timeoutW = 224;
-        Controls.Add(new Label
+        _kbSpeedLabel = new Label
         {
             Text = "Speed",
             Location = new Point(S(Pad), S(_y + 7)),
             Size = new Size(S(50), S(18)),
             ForeColor = Theme.Muted,
             Font = _fSmall,
-        });
+        };
+        Controls.Add(_kbSpeedLabel);
         _kbSpeed = new SegRow(S(32), S(6), _fBody, false, 0, new("Slow"), new("Normal"), new("Fast"))
         {
             Location = new Point(S(Pad + 52), S(_y)),
             Width = S(ContentWidth - 52 - timeoutW - 12),
         };
-        _kbSpeed.ButtonClicked += i => Run(() => _c.SetKeyboardSpeed(SpeedOrder[i]));
+        // Speed for Breathing / Color Cycle; for Heat the same row picks the temperature source.
+        _kbSpeed.ButtonClicked += i =>
+        {
+            if (Settings.Current.KeyboardEffect == KbEffect.CpuHeat) Run(() => _c.SetKeyboardHeatSource(HeatOrder[i]));
+            else Run(() => _c.SetKeyboardSpeed(SpeedOrder[i]));
+        };
         Controls.Add(_kbSpeed);
         _kbTimeoutAC = TimeoutButton("plugged", Pad + ContentWidth - timeoutW, pluggedIn: true);
         _kbTimeoutDC = TimeoutButton("battery-saver", Pad + ContentWidth - timeoutW + 116, pluggedIn: false);
@@ -371,7 +379,7 @@ public sealed class MainForm : Form
         {
             KbEffect.Breathing => $"Breathing · {speed} · {s.KeyboardBrightness}%",
             KbEffect.ColorCycle => $"Color Cycle · {speed} · {s.KeyboardBrightness}%",
-            KbEffect.CpuHeat => _c.CpuFan.Temp > 0 ? $"CPU Heat · {_c.CpuFan.Temp}°C" : "CPU Heat",
+            KbEffect.CpuHeat => _c.Effects.HeatLabel.Length > 0 ? $"Heat · {_c.Effects.HeatLabel}" : "Heat",
             _ => $"Brightness {s.KeyboardBrightness}%",
         };
     }
@@ -638,8 +646,16 @@ public sealed class MainForm : Form
         };
         if (!_kbSlider.IsDragging) _kbSlider.Value = s.KeyboardBrightness;
         bool animated = s.KeyboardEffect is KbEffect.Breathing or KbEffect.ColorCycle;
-        for (int i = 0; i < _kbSpeed.Count; i++) _kbSpeed.SetEnabled(i, animated);
-        _kbSpeed.Select(animated ? Array.IndexOf(SpeedOrder, s.KeyboardSpeed) : -1);
+        bool heat = s.KeyboardEffect == KbEffect.CpuHeat;
+        _kbSpeedLabel.Text = heat ? "Source" : "Speed";
+        string[] labels = heat ? new[] { "CPU", "GPU", "Hottest" } : new[] { "Slow", "Normal", "Fast" };
+        for (int i = 0; i < _kbSpeed.Count; i++)
+        {
+            _kbSpeed[i].Text = labels[i];
+            _kbSpeed.SetEnabled(i, animated || heat);
+        }
+        _kbSpeed.Select(heat ? Array.IndexOf(HeatOrder, s.KeyboardHeatSource)
+            : animated ? Array.IndexOf(SpeedOrder, s.KeyboardSpeed) : -1);
         _kbTimeoutAC.Text = s.KeyboardTimeoutAC <= 0 ? "Never" : TimeoutText(s.KeyboardTimeoutAC);
         _kbTimeoutDC.Text = s.KeyboardTimeoutDC <= 0 ? "Never" : TimeoutText(s.KeyboardTimeoutDC);
         _kbHint.Text = KeyboardHint();

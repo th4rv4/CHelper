@@ -127,7 +127,7 @@ public sealed class FnKeys
             {
                 KbEffect.Breathing => "Breathing",
                 KbEffect.ColorCycle => "Color Cycle",
-                _ => "CPU Heat",
+                _ => "Heat",
             });
         }
     }

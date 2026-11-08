@@ -557,6 +557,14 @@ public sealed class Controller
         Changed();
     }
 
+    public void SetKeyboardHeatSource(HeatSource source)
+    {
+        S.KeyboardHeatSource = source;
+        Settings.Save();
+        Effects.Source = source; // picked up on the next second, no restart needed
+        Changed();
+    }
+
     public void SetKeyboardSpeed(KbSpeed speed)
     {
         S.KeyboardSpeed = speed;
@@ -582,6 +590,8 @@ public sealed class Controller
     private void ApplyKeyboardLighting()
     {
         var color = Color.FromArgb(S.KeyboardColor);
+        Effects.Source = S.KeyboardHeatSource;
+        Effects.GpuOn = () => DgpuPresent || InUltimate;
         Effects.Configure(S.KeyboardEffect, S.KeyboardSpeed, color, S.KeyboardBrightness, KeyboardTimeoutNow);
         if (!Effects.Running)
         {

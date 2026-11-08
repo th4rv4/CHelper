@@ -25,7 +25,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 2. GPU modes: **Eco** · **Standard** · **Optimized** · **dGPU Only**
 3. Custom **fan curves** for CPU and GPU, per power mode, with presets
 4. Screen refresh rate control
-5. **Keyboard lighting**: colour, brightness slider and effects (Static, Breathing, Color Cycle, CPU Heat)
+5. **Keyboard lighting**: colour, brightness slider and effects (Static, Breathing, Color Cycle, Heat)
 6. Keyboard backlight timer, separate for plugged in and on battery
 7. **Battery charge limit** (60–100 %) with **Full Charge Once** for trips, charge, charging / discharging watts and battery health
 8. Live CPU / GPU temperature and fan speed
@@ -86,7 +86,7 @@ Single-zone RGB: colour picker, brightness slider (applies live while dragging) 
 - **Static**: one colour
 - **Breathing**: fades your colour in and out (Slow / Normal / Fast)
 - **Color Cycle**: loops through the rainbow (Slow / Normal / Fast)
-- **CPU Heat**: green when cool, yellow, then red when the CPU is hot
+- **Heat**: green when cool, yellow, then red when hot. Follows the **CPU**, the **GPU** (handy while gaming) or whichever is **Hottest**, each on its own scale
 
 Effects pause when the backlight timer turns the light off, and resume at the next key press.
 

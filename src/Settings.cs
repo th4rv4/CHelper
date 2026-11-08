@@ -33,6 +33,7 @@ public sealed class AppSettings
     public int KeyboardBrightness { get; set; } = 75;
     public KbEffect KeyboardEffect { get; set; } = KbEffect.Static;
     public KbSpeed KeyboardSpeed { get; set; } = KbSpeed.Normal;
+    public HeatSource KeyboardHeatSource { get; set; } = HeatSource.Hottest;
     /// <summary>Backlight turns off after this many idle seconds (EC timer); 0 = never. Plugged in / on battery.</summary>
     public int KeyboardTimeoutAC { get; set; } = 300;
     public int KeyboardTimeoutDC { get; set; } = 15;
