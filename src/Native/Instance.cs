@@ -58,9 +58,14 @@ public static class Instance
         {
             // The task starts C-Helper hidden (--tray); open the window once it is up.
             var sw = Stopwatch.StartNew();
-            while (!IsRunning && sw.ElapsedMilliseconds < 10_000) Thread.Sleep(150);
-            if (showWindow) Signal(ShowMessage);
-            return;
+            while (!IsRunning && sw.ElapsedMilliseconds < 8_000) Thread.Sleep(150);
+            if (IsRunning)
+            {
+                if (showWindow) Signal(ShowMessage);
+                return;
+            }
+            // Task Scheduler accepted the run but nothing started (e.g. an older task that won't start on
+            // battery): fall back to a UAC prompt instead of doing nothing.
         }
 
         try
