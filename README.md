@@ -106,7 +106,7 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 
 - **Colorful EVOL P15 23** (other Clevo / Insyde laptops with the same interface may work, but are untested)
 - The Clevo ACPI bridge driver (`CLEVO-acpibridge1.inf`), installed with the laptop drivers (it stays when the Control Center is removed)
-- `InsydeDCHU.dll`: on first run C-Helper copies it from the vendor **"Fn hot keys and OSD"** package into `%LOCALAPPDATA%\CHelper\dchu`. After that the vendor app can be uninstalled. Builds that include it (see [vendor/README.md](vendor/README.md)) need no vendor software at all
+- Nothing from the vendor app: `InsydeDCHU.dll` is included in this repo and built into `CHelper.exe` (see [vendor/README.md](vendor/README.md)), so the Control Center can be uninstalled or never installed
 - Windows 10 2004 or newer, 64-bit
 - [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). The installer downloads and installs it automatically if it is missing
 - Administrator rights (switching the GPU and the fans needs them). **Run on Startup** uses a scheduled task, so there is no UAC prompt at logon
