@@ -9,7 +9,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 
 <p align="center"><img width="420" alt="C-Helper" src="docs/screenshot.png" /></p>
 
-**[⬇️ Download the installer](https://github.com/th4rv4/CHelper/releases/latest)** (`CHelper-Setup-x.y.z.exe`), or the portable `CHelper.exe` from the same page.
+**[🌐 Website](https://th4rv4.github.io/CHelper/)** · **[⬇️ Download the installer](https://github.com/th4rv4/CHelper/releases/latest)** (`CHelper-Setup-x.y.z.exe`), or the portable `CHelper.exe` from the same page.
 
 ## :gift: Advantages
 

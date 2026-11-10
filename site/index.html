@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-Helper · Control Center Replacement for the Colorful EVOL P15</title>
+<meta name="description" content="A small, fast replacement for the vendor Control Center on the Colorful EVOL P15 23: power modes, GPU modes, fan curves, keyboard lighting, battery charge limit and Fn keys in one tray app.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #0E0F11; --panel: #15171B; --card: #1B1E24; --line: #2B3038;
+    --text: #ECEFF4; --muted: #8D95A3; --dim: #5F6673; --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* nav */
+  nav { position: sticky; top: 0; z-index: 10; background: rgba(14,15,17,.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; }
+  .brand img { width: 26px; height: 26px; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+  nav .links a { color: var(--muted); text-decoration: none; }
+  nav .links a:hover { color: var(--text); }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); cursor: pointer; background: var(--card); color: var(--text); }
+  .btn:hover { border-color: #4A505B; }
+  .btn.primary { background: var(--white); color: #0E0F11; border-color: var(--white); }
+  .btn.primary:hover { background: #E3E5E9; }
+  .btn svg { width: 18px; height: 18px; }
+
+  /* hero */
+  .hero { padding: 88px 0 72px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
+  .hero .icon { width: 72px; height: 72px; margin-bottom: 22px; }
+  .eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: 52px; line-height: 1.08; margin: 10px 0 18px; letter-spacing: -.02em; }
+  .lead { color: var(--muted); font-size: 18px; max-width: 520px; margin: 0 0 30px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta { color: var(--dim); font-size: 13px; margin-top: 16px; }
+  .shot { justify-self: center; position: relative; }
+  .shot img { width: 360px; max-width: 100%; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.55); display: block; }
+
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 32px; margin: 0 0 10px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 36px; max-width: 640px; }
+
+  /* why */
+  .why { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+  .why p { color: #C9CED6; margin: 0 0 16px; }
+  .quote { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; }
+  .quote li { margin: 0 0 12px; color: #C9CED6; }
+  .quote ul { margin: 0; padding-left: 18px; }
+
+  /* comparison */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  th, td { text-align: left; padding: 16px 20px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 15px; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; background: var(--card); }
+  td:first-child { color: var(--muted); width: 24%; }
+  td:nth-child(2) { color: #A9AFBA; width: 36%; }
+  td:last-child { color: var(--text); }
+  tr:last-child td { border-bottom: 0; }
+  .yes::before { content: "✓ "; color: var(--white); font-weight: 700; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 12px 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .card .ico { width: 34px; height: 34px; border-radius: 9px; background: #262A31; display: grid; place-items: center; }
+  .card .ico svg { width: 18px; height: 18px; stroke: var(--white); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* install */
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .steps .card::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--white); color: #0E0F11; font-weight: 700; font-size: 14px; }
+
+  /* support */
+  .support { background: var(--panel); }
+  .support .box { display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 32px; }
+  .upi { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .upi code { font: 600 16px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; background: #0E0F11; border: 1px solid var(--line); padding: 12px 14px; border-radius: 10px; }
+  .copied { color: var(--muted); font-size: 13px; min-width: 60px; }
+
+  footer { padding: 28px 0 40px; color: var(--dim); font-size: 13px; }
+  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+
+  @media (max-width: 860px) {
+    .hero, .why, .support .box { grid-template-columns: 1fr; }
+    .grid, .steps { grid-template-columns: 1fr; }
+    h1 { font-size: 40px; }
+    nav .links { display: none; }
+    td:first-child, td:nth-child(2) { width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.svg" alt="">C-Helper</a>
+    <div class="links">
+      <a href="#why">Why</a>
+      <a href="#compare">Vs Stock</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#support">Support</a>
+    </div>
+    <a class="btn" style="padding:8px 14px;font-size:14px" href="https://github.com/th4rv4/CHelper">GitHub</a>
+  </div>
+</nav>
+
+<header class="wrap hero">
+  <div>
+    <img class="icon" src="icon.svg" alt="C-Helper icon">
+    <div class="eyebrow">For the Colorful EVOL P15 23</div>
+    <h1>The Control Center,<br>without the clutter.</h1>
+    <p class="lead">C-Helper replaces the vendor Control Center with one small tray app: power modes, GPU modes, fan curves, keyboard lighting, battery charge limit and Fn keys. No background services, no Store apps.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/th4rv4/CHelper/releases/latest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+        Download
+      </a>
+      <a class="btn" href="https://github.com/th4rv4/CHelper">View Source</a>
+    </div>
+    <div class="meta" id="version">Windows 10 / 11 · Free and open source (GPL-3.0)</div>
+  </div>
+  <div class="shot"><img src="screenshot.png" alt="C-Helper main window"></div>
+</header>
+
+<section id="why">
+  <div class="wrap why">
+    <div>
+      <h2>Why I Made It</h2>
+      <p>The EVOL P15 is a great laptop, but its Control Center isn't one app. It's nine separate Store apps, two background services, a launcher that runs at every sign-in and a keyboard filter driver, just to switch a power mode or change the keyboard colour.</p>
+      <p>And it got in the way. Every time I switched to Power Saving, the screen dropped back to 40 Hz, and I had to set 165 Hz again by hand. Every single time.</p>
+      <p>I wanted what <a href="https://github.com/seerge/g-helper">G-Helper</a> gives ASUS owners: one small window that does the job and stays out of the way. So I worked out how the laptop talks to its firmware and built C-Helper around that.</p>
+    </div>
+    <div class="quote">
+      <ul>
+        <li>One app instead of a bundle of Store apps and services.</li>
+        <li>The refresh rate stays where you put it when you change power mode.</li>
+        <li>Fn keys, popups and fan control keep working with the vendor software uninstalled.</li>
+        <li>Things the stock app never had: fan curves per power mode, keyboard effects, battery health and watts.</li>
+        <li>Updates itself from GitHub in one click.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <h2>C-Helper vs Stock Control Center</h2>
+    <p class="sub">Same BIOS power modes and GPU modes underneath. The difference is everything around them.</p>
+    <table>
+      <tr><th></th><th>Stock Control Center</th><th>C-Helper</th></tr>
+      <tr><td>What gets installed</td><td>9 Store apps, 2 background services, a sign-in launcher and a keyboard filter driver</td><td class="yes">One app and a ~7.5 MB installer</td></tr>
+      <tr><td>Running in the background</td><td>Services and helpers start with Windows</td><td class="yes">One tray app; memory trimmed when the window is closed</td></tr>
+      <tr><td>Power &amp; GPU modes</td><td>Eco GPU tied to Power Saving</td><td class="yes">Independent: any power mode with any GPU mode</td></tr>
+      <tr><td>Fans</td><td>BIOS behaviour per mode</td><td class="yes">BIOS behaviour, Maximum, or your own CPU and GPU curves for each power mode</td></tr>
+      <tr><td>Keyboard lighting</td><td>Colour and brightness</td><td class="yes">Static, Breathing, Color Cycle and Heat (follows CPU or GPU temperature), plus a backlight timer for charger and battery</td></tr>
+      <tr><td>Battery</td><td>Charge limit</td><td class="yes">Charge limit, Full Charge Once for trips, live watts and battery health</td></tr>
+      <tr><td>Plugging in / unplugging</td><td>Manual</td><td class="yes">Auto Mode switches power mode, GPU mode and refresh rate for you</td></tr>
+      <tr><td>Screen refresh rate</td><td>Drops to 40 Hz every time you switch to Power Saving</td><td class="yes">Stays where you set it: 40 Hz, 165 Hz, or Auto (165 Hz on charger, 40 Hz on battery)</td></tr>
+      <tr><td>Windows power mode</td><td>Separate setting</td><td class="yes">Set to match each power mode</td></tr>
+      <tr><td>Updates</td><td>Through the Store, app by app</td><td class="yes">Checks GitHub daily; one click installs and verifies the update</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Features</h2>
+    <p class="sub">Everything the stock app does day to day, plus the things I missed.</p>
+    <div class="grid">
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg></div><h3>Power Modes</h3><p>Quiet, Power Saving, Balanced and Turbo, the same BIOS profiles as stock, with an on-screen popup.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4v4H7zM15 10h2M15 14h2"/></svg></div><h3>GPU Modes</h3><p>Eco, Standard, Optimized and dGPU Only. Optimized turns the RTX 4060 off on battery and on when plugged in.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-7 4-7 2 0 3 2 2 4-1 1.5-3 2.5-6 3M14 12c4 0 7 1 7 4 0 2-2 3-4 2-1.5-1-2.5-3-3-6M12 14c0 4-1 7-4 7-2 0-3-2-2-4 1-1.5 3-2.5 6-3M10 12c-4 0-7-1-7-4 0-2 2-3 4-2 1.5 1 2.5 3 3 6"/></svg></div><h3>Fan Curves</h3><p>Your own CPU and GPU curves for each power mode, with presets and safety limits.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></div><h3>Keyboard Lighting</h3><p>Colour, brightness and effects, including Heat that turns warmer as the CPU or GPU heats up.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2M6 10v4M10 10v4"/></svg></div><h3>Battery</h3><p>Charge limit from 60 to 100 %, Full Charge Once, live charge and discharge watts, battery health.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h3>Refresh Rate</h3><p>40 Hz, 165 Hz or Auto. Your choice survives power mode changes, sleep and plugging in.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div><h3>Auto Mode</h3><p>One power mode for the charger and one for battery. C-Helper switches the moment you plug in or unplug.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 15l2 2 3-4"/></svg></div><h3>Fn Keys &amp; Popups</h3><p>Fn keys, Caps / Num Lock, camera and touchpad popups, read straight from the BIOS.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>In-App Updates</h3><p>Checks GitHub once a day. One click downloads the new version, checks it and installs it.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">Takes a minute. Settings are kept when you update.</p>
+    <div class="steps">
+      <div class="card"><h3>Download</h3><p>Get <b>CHelper-Setup-x.y.z.exe</b> from the latest release on GitHub.</p></div>
+      <div class="card"><h3>Run The Installer</h3><p>It adds the .NET runtime and the firmware bridge driver if they're missing, and can start C-Helper at sign-in.</p></div>
+      <div class="card"><h3>Uninstall The Stock App</h3><p>Optional, but C-Helper is built to replace it. Fn keys keep working without it.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="support" class="support">
+  <div class="wrap">
+    <div class="box">
+      <div>
+        <h2>Support The Developer</h2>
+        <p class="sub" style="margin:0">C-Helper is free and always will be. If it made your laptop nicer to use, you can buy me a coffee over UPI.</p>
+        <div class="upi">
+          <code id="upi-id">atharvaagnihotri@upi</code>
+          <button class="btn" id="copy">Copy</button>
+          <a class="btn primary" id="pay" href="#">Pay With UPI</a>
+          <span class="copied" id="copied"></span>
+        </div>
+      </div>
+      <img src="icon.svg" alt="" style="width:96px;height:96px;opacity:.9">
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>C-Helper by <a href="https://github.com/th4rv4">th4rv4</a> · GPL-3.0</span>
+    <span>Not affiliated with Colorful, Clevo or Insyde.</span>
+  </div>
+</footer>
+
+<script>
+  // Single place to set the UPI ID.
+  const UPI_ID = "atharvaagnihotri@upi";
+  const UPI_NAME = "Atharva Agnihotri";
+  document.getElementById("upi-id").textContent = UPI_ID;
+  document.getElementById("pay").href =
+    "upi://pay?pa=" + encodeURIComponent(UPI_ID) + "&pn=" + encodeURIComponent(UPI_NAME) + "&cu=INR&tn=" + encodeURIComponent("C-Helper");
+  document.getElementById("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(UPI_ID); document.getElementById("copied").textContent = "Copied"; }
+    catch { document.getElementById("copied").textContent = "Select and copy"; }
+  });
+
+  // Show the latest version next to the download button.
+  fetch("https://api.github.com/repos/th4rv4/CHelper/releases/latest")
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.tag_name) document.getElementById("version").textContent =
+      "Latest " + j.tag_name + " · Windows 10 / 11 · Free and open source (GPL-3.0)"; })
+    .catch(() => {});
+</script>
+</body>
+</html>
