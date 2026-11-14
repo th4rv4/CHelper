@@ -57,6 +57,13 @@ public sealed class FanCurveForm : Form
 
     private int S(float v) => (int)Math.Round(v * DeviceDpi / 96f);
 
+    protected override void WndProc(ref Message m)
+    {
+        // Keyboard-layout changes go straight to Windows (see InputLanguageGuard).
+        if (InputLanguageGuard.IsLayoutMessage(m.Msg)) { DefWndProc(ref m); return; }
+        base.WndProc(ref m);
+    }
+
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
