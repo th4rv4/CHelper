@@ -126,6 +126,21 @@ public sealed class Controller
         Safe("gpu", () => ApplyGpu());
         Safe("screen", () => ApplyScreen());
         Changed();
+        ReassertKeyboardBrightness();
+    }
+
+    /// <summary>
+    /// Right after boot or wake the EC can still be bringing the backlight up and ignore an "off" sent in the
+    /// same moment, leaving the keyboard lit in the saved colour while C-Helper shows Off. Send the brightness
+    /// once more a couple of seconds later (static lighting only; effects keep writing anyway).
+    /// </summary>
+    private void ReassertKeyboardBrightness()
+    {
+        Task.Delay(2500).ContinueWith(_ =>
+        {
+            if (Effects.Running) return;
+            Safe("keyboard brightness", () => Clevo.SetKeyboardBrightness(S.KeyboardBrightness));
+        });
     }
 
     private void ApplySourceDependent(string reason)
@@ -595,7 +610,13 @@ public sealed class Controller
         Effects.Configure(S.KeyboardEffect, S.KeyboardSpeed, color, S.KeyboardBrightness, KeyboardTimeoutNow);
         if (!Effects.Running)
         {
-            Clevo.SetKeyboardColor(color);
+            // Off: only the brightness matters, and a colour write can switch the backlight back on.
+            // On: the EC needs a moment after a colour change before it takes the brightness.
+            if (S.KeyboardBrightness > 0)
+            {
+                Clevo.SetKeyboardColor(color);
+                Thread.Sleep(60);
+            }
             Clevo.SetKeyboardBrightness(S.KeyboardBrightness);
         }
     }
