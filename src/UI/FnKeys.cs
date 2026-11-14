@@ -81,10 +81,6 @@ public sealed class FnKeys
                 PressTouchpad();
                 break;
 
-            case BiosEvents.PowerModeKey:
-                CycleMode(+1);
-                break;
-
             case BiosEvents.KbColor:
                 CycleLighting(s);
                 break;

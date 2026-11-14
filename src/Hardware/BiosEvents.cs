@@ -36,8 +36,8 @@ public static class BiosEvents
     public const int TouchpadA = 0xFC;
     public const int TouchpadB = 0xFD;
 
-    /// <summary>Fn+F4: next power mode.</summary>
-    public const int PowerModeKey = 0xFB;
+    /// <summary>Fn+F3 (mute). Windows already mutes on its own; C-Helper ignores it.</summary>
+    public const int MuteKey = 0xFB;
 
     public const int NumLockOff = 0xC7;
     public const int NumLockOn = 0xC8;
