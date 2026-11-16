@@ -563,7 +563,12 @@ public sealed class MainForm : Form
     private void OpenStockSoftware()
     {
         using var form = new StockSoftwareForm();
-        form.Changed += () => _ = CheckStockSoftwareAsync();
+        form.Changed += () =>
+        {
+            _ = CheckStockSoftwareAsync();
+            // Stopping (or starting) the stock hotkey service switches the BIOS key events off: turn them back on.
+            Task.Delay(1500).ContinueWith(_ => _c.ReconnectHotkeys("stock software changed"));
+        };
         form.ShowDialog(this);
     }
 

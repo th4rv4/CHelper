@@ -211,6 +211,13 @@ public static class StockSoftware
             if (code == 0) Log.Info($"Stock app no longer installed for new users: {name}");
             else errors.Add($"{name}: {output.Trim()}");
         }
+        // Removing the app can take the new-account copy with it, and then removing that copy fails with
+        // "cannot find the file". Only count what is really still there.
+        if (errors.Count > 0)
+        {
+            var left = StoreApps();
+            errors = errors.Where(e => left.Installed.Concat(left.Provisioned).Any(n => e.StartsWith(n + ":"))).ToList();
+        }
         if (errors.Count > 0)
         {
             Log.Info("Stock app removal problems: " + string.Join(" | ", errors));

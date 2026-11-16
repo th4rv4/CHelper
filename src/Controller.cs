@@ -295,6 +295,17 @@ public sealed class Controller
     }
 
     /// <summary>Called on quit and on crash: never leave the fans at a fixed duty, or the keyboard mid-effect.</summary>
+    /// <summary>
+    /// Turns the BIOS key events back on and reconnects the hotkey listener. Needed after the stock hotkey
+    /// service is stopped or started: it switches the events off (or takes them over) on its way.
+    /// </summary>
+    public void ReconnectHotkeys(string reason)
+    {
+        Log.Info($"Hotkeys: reconnecting ({reason})");
+        Safe("enable BIOS key events", Clevo.EnableEvents);
+        Safe("hotkeys", HotkeyListener.Restart);
+    }
+
     public void Shutdown()
     {
         StopCurves("exit");
