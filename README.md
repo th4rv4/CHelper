@@ -174,11 +174,17 @@ dotnet publish src/CHelper.csproj -c Release -o out
 # -> out\CHelper.exe
 
 # installer (Inno Setup 6)
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.1 installer\CHelper.iss
-# -> out\CHelper-Setup-1.0.1.exe
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.2.3 installer\CHelper.iss
+# -> out\CHelper-Setup-1.2.3.exe
 ```
 
-Every push builds the exe and the installer with GitHub Actions. Pushing a tag like `v1.0.1` also publishes a release with both and their SHA-256 checksums.
+GitHub Actions builds only when a version tag is pushed (or when started by hand). The tag is the version, so releasing is just:
+
+```
+git tag v1.2.3 && git push origin v1.2.3
+```
+
+That builds the exe and the installer, and publishes a release with both, their SHA-256 checksums and the commits since the previous tag. There's no version number to bump in the code.
 
 ## 🔬 How it works
 

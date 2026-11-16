@@ -9,7 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CHelper</RootNamespace>
     <AssemblyName>CHelper</AssemblyName>
-    <Version>1.0.1</Version>
+    <!-- The real version comes from the git tag (v1.0.2 -> 1.0.2) when GitHub Actions builds a release. -->
+    <Version>0.0.0</Version>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
