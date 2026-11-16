@@ -25,6 +25,7 @@ public sealed class MainForm : Form
     private Label _stats, _modeHint, _gpuHint, _fanHint, _screenHint, _kbHint, _chargeHint;
     private Label _batCharge, _batRateLabel, _batRate, _batHealth;
     private TileButton _fullCharge;
+    private TileButton _stockBtn;
     private StepSlider _charge;
     private SegRow _modes, _gpu, _fans, _screen, _options, _kbEffects, _kbSpeed;
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
@@ -95,7 +96,11 @@ public sealed class MainForm : Form
         };
         _updateTimer.Tick += (_, _) =>
         {
-            if (_updateTimer.Interval == 30_000) Updater.CleanUp();
+            if (_updateTimer.Interval == 30_000)
+            {
+                Updater.CleanUp();
+                _ = CheckStockSoftwareAsync();
+            }
             _updateTimer.Interval = 24 * 60 * 60 * 1000;
             if (Settings.Current.CheckForUpdates) _ = CheckForUpdatesAsync(manual: false);
         };
@@ -285,7 +290,23 @@ public sealed class MainForm : Form
         _kbTimeoutDC = TimeoutButton("battery-saver", Pad + ContentWidth - timeoutW + 116, pluggedIn: false);
         _y += 32 + 12;
 
-        Section("settings", "Options");
+        var optionsHint = Section("settings", "Options");
+        // Remove Stock App at the right end of the title row; only shown while the stock software is still there.
+        const int stockW = 150;
+        _stockBtn = new TileButton
+        {
+            Text = "Remove Stock App",
+            Vertical = false,
+            Font = _fSmall,
+            Accent = Theme.Turbo,
+            Location = new Point(S(Pad + ContentWidth - stockW), S(_y - 28 - 3)),
+            Size = new Size(S(stockW), S(26)),
+            Visible = false,
+        };
+        _stockBtn.Click += (_, _) => OpenStockSoftware();
+        _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
+        optionsHint.Width = S(ContentWidth - 200 - stockW - 10); // keep the empty hint off the button
+        Controls.Add(_stockBtn);
         _options = Row(46, false, 18,
             new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"));
         _options.ButtonClicked += OnOptionClicked;
@@ -535,6 +556,29 @@ public sealed class MainForm : Form
         int i = Array.IndexOf(TimeoutSteps, current);
         int next = TimeoutSteps[(i + 1) % TimeoutSteps.Length];
         Run(() => _c.SetKeyboardTimeout(pluggedIn, next));
+    }
+
+    private void OpenStockSoftware()
+    {
+        using var form = new StockSoftwareForm();
+        form.Changed += () => _ = CheckStockSoftwareAsync();
+        form.ShowDialog(this);
+    }
+
+    /// <summary>Shows the Remove Stock App button only while something from the stock software is left.</summary>
+    private async Task CheckStockSoftwareAsync()
+    {
+        try
+        {
+            bool any = await Task.Run(() => StockSoftware.AnythingToRemove(StockSoftware.Detect()));
+            if (IsDisposed) return;
+            _stockBtn.Visible = any;
+            if (any) Log.Info("Stock Control Center software found");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Checking for the stock software failed", ex);
+        }
     }
 
     private void OpenCurves()

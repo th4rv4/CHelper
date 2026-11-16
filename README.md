@@ -42,6 +42,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 - **Full Charge Once**: charges to 100 % this time; the charge limit comes back by itself when you unplug
 - Settings are re-applied after sleep and when the charger is connected or removed
 - **Updates**: checks GitHub Releases once a day; when a newer version is out, the footer shows **Update To vX.Y.Z**. One click downloads the installer, checks its SHA-256, installs it silently and reopens C-Helper. Click the version number to check right away
+- **Remove Stock App**: shown in Options while the stock Control Center is still installed. Stops and disables its two services, uninstalls its Store apps and moves its leftover files to the Recycle Bin. The stock keyboard and touchpad filter drivers are left alone, since removing them can stop the keyboard working, and so is the firmware bridge driver C-Helper uses
 
 ### :rocket: Power Modes
 
