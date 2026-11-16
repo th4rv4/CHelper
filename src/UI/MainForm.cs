@@ -26,6 +26,7 @@ public sealed class MainForm : Form
     private Label _batCharge, _batRateLabel, _batRate, _batHealth;
     private TileButton _fullCharge;
     private TileButton _stockBtn;
+    private bool _stockFound; // kept here so the button survives the window being rebuilt
     private StepSlider _charge;
     private SegRow _modes, _gpu, _fans, _screen, _options, _kbEffects, _kbSpeed;
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
@@ -142,6 +143,7 @@ public sealed class MainForm : Form
     {
         base.OnDpiChanged(e);
         // Moved to a monitor with a different scale: rebuild at the new size.
+        Log.Info($"Window rebuilt for {DeviceDpi} DPI");
         SuspendLayout();
         var old = Controls.Cast<Control>().ToList();
         Controls.Clear();
@@ -301,7 +303,7 @@ public sealed class MainForm : Form
             Accent = Theme.Turbo,
             Location = new Point(S(Pad + ContentWidth - stockW), S(_y - 28 - 3)),
             Size = new Size(S(stockW), S(26)),
-            Visible = false,
+            Visible = _stockFound,
         };
         _stockBtn.Click += (_, _) => OpenStockSoftware();
         _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
@@ -572,7 +574,8 @@ public sealed class MainForm : Form
         {
             bool any = await Task.Run(() => StockSoftware.AnythingToRemove(StockSoftware.Detect()));
             if (IsDisposed) return;
-            _stockBtn.Visible = any;
+            _stockFound = any;
+            if (_stockBtn is { IsDisposed: false }) _stockBtn.Visible = any;
             if (any) Log.Info("Stock Control Center software found");
         }
         catch (Exception ex)
