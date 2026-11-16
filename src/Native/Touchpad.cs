@@ -38,6 +38,58 @@ public static class Touchpad
         keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
     }
 
+    // ---------------- watching ----------------
+
+    /// <summary>Raised (on a background thread) whenever the touchpad is switched on or off, by anyone.</summary>
+    public static event Action<bool> Changed;
+
+    private static Thread _watcher;
+
+    /// <summary>Starts watching the touchpad state in the registry (once).</summary>
+    public static void StartWatching()
+    {
+        if (_watcher != null) return;
+        _watcher = new Thread(Watch) { IsBackground = true, Name = "Touchpad watcher" };
+        _watcher.Start();
+    }
+
+    private static void Watch()
+    {
+        const uint REG_NOTIFY_CHANGE_LAST_SET = 0x4;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status");
+            if (key == null)
+            {
+                Log.Info("Touchpad: no precision touchpad state to watch");
+                return;
+            }
+            using var signal = new AutoResetEvent(false);
+            bool? last = IsEnabled();
+            while (true)
+            {
+                int rc = RegNotifyChangeKeyValue(key.Handle.DangerousGetHandle(), false, REG_NOTIFY_CHANGE_LAST_SET,
+                    signal.SafeWaitHandle.DangerousGetHandle(), true);
+                if (rc != 0)
+                {
+                    Log.Info($"Touchpad: can't watch the state (error {rc})");
+                    return;
+                }
+                signal.WaitOne();
+                bool? now = IsEnabled();
+                if (now is bool on && now != last) Changed?.Invoke(on);
+                last = now;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Touchpad watcher stopped", ex);
+        }
+    }
+
+    [DllImport("advapi32.dll")]
+    private static extern int RegNotifyChangeKeyValue(IntPtr hKey, bool watchSubtree, uint filter, IntPtr hEvent, bool asynchronous);
+
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 }

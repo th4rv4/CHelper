@@ -24,6 +24,8 @@ public sealed class FnKeys
     public FnKeys(MainForm main)
     {
         _main = main;
+        Touchpad.Changed += OnTouchpadChanged;
+        Touchpad.StartWatching();
     }
 
     /// <summary>Call on the UI thread.</summary>
@@ -127,15 +129,56 @@ public sealed class FnKeys
 
     // ---------------- touchpad ----------------
     // The touchpad key only reports "pressed"; Windows keeps the real state in the registry and switches it on
-    // Win+Ctrl+F24. Each press flips the state we want and shows it straight away; one background worker then
-    // brings Windows to that state. Fast presses no longer queue up a second of work each, and an even number
-    // of presses that arrive while it is busy simply cancel out.
+    // Win+Ctrl+F24. On this laptop Windows usually switches the touchpad by itself on the same key press, so
+    // C-Helper watches the state: if it changes around the press, Windows did it and C-Helper only shows the
+    // popup. Only when nothing changes does C-Helper switch it itself. (Switching it as well made a single
+    // press undo itself, so the touchpad only changed on a quick double press.)
 
     private volatile bool _touchpadWanted = true;
-    private int _touchpadBusy; // 1 while the worker runs
+    private int _touchpadBusy;              // 1 while C-Helper's own worker runs
+    private long _touchpadPressMs;          // last touchpad key press
+    private long _touchpadOutsideChangeMs;  // last change C-Helper didn't make
+    private long _touchpadSelfUntilMs;      // changes before this are C-Helper's own toggles
+
+    private static long NowMs => Environment.TickCount64;
 
     /// <summary>Call on the UI thread.</summary>
     private void PressTouchpad()
+    {
+        long pressed = NowMs;
+        _touchpadPressMs = pressed;
+        // Windows sometimes switches it a moment before the BIOS event arrives: show that now.
+        if (pressed - Volatile.Read(ref _touchpadOutsideChangeMs) <= 300)
+        {
+            bool on = Touchpad.IsEnabled() ?? _touchpadWanted;
+            Log.Info($"Touchpad {(on ? "on" : "off")} (switched by Windows)");
+            _osd.ShowOsd("touchpad", on ? "Touchpad On" : "Touchpad Off");
+            return;
+        }
+        // Give Windows a moment; it may also have switched it just before the BIOS event arrived.
+        Task.Delay(350).ContinueWith(_ =>
+        {
+            if (Volatile.Read(ref _touchpadOutsideChangeMs) >= pressed - 300) return; // Windows did it
+            if (!_main.IsHandleCreated) return;
+            _main.BeginInvoke(new Action(SwitchTouchpadOurselves));
+        });
+    }
+
+    /// <summary>The touchpad state changed (background thread).</summary>
+    private void OnTouchpadChanged(bool on)
+    {
+        long now = NowMs;
+        if (now < Volatile.Read(ref _touchpadSelfUntilMs)) return; // our own toggle
+        Volatile.Write(ref _touchpadOutsideChangeMs, now);
+        _touchpadWanted = on;
+        if (now - _touchpadPressMs > 1500) return; // changed in Settings, not with the key: no popup
+        Log.Info($"Touchpad {(on ? "on" : "off")} (switched by Windows)");
+        if (_main.IsHandleCreated)
+            _main.BeginInvoke(new Action(() => _osd.ShowOsd("touchpad", on ? "Touchpad On" : "Touchpad Off")));
+    }
+
+    /// <summary>Windows didn't react to the key: flip the wanted state and switch it (UI thread).</summary>
+    private void SwitchTouchpadOurselves()
     {
         bool busy = Volatile.Read(ref _touchpadBusy) == 1;
         bool current = busy ? _touchpadWanted : Touchpad.IsEnabled() ?? _touchpadWanted;
@@ -153,12 +196,11 @@ public sealed class FnKeys
             {
                 int toggles = 0;
                 bool? actual = Touchpad.IsEnabled();
-                // Windows itself may handle the key on some setups; give it a moment before stepping in.
-                if (actual.HasValue && actual != _touchpadWanted) actual = WaitForChange(actual.Value, 150);
 
                 while (actual != _touchpadWanted && toggles < 6)
                 {
                     bool? before = actual;
+                    Volatile.Write(ref _touchpadSelfUntilMs, NowMs + 1200);
                     Touchpad.Toggle();
                     toggles++;
                     if (!before.HasValue) break; // state unknown: one toggle per press is all we can do
