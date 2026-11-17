@@ -901,15 +901,26 @@ public sealed class MainForm : Form
         _batHealth.Text = _c.BatteryHealth > 0 ? $"{_c.BatteryHealth:0.0}%" : "—";
 
         var cpu = _c.CpuFan;
-        _modeHint.Text = cpu.Temp > 0 ? $"CPU {cpu.Temp}°C · Fan {cpu.Duty}%" : "";
+        _modeHint.Text = Readout("CPU", _c.CpuLoad, cpu);
         _fanHint.Text = FanHint();
         if (s.KeyboardEffect == KbEffect.CpuHeat) _kbHint.Text = KeyboardHint();
 
         var gpu = _c.GpuFan;
         _gpuHint.Text = _c.GpuBusy ? "Switching…"
             : !_c.DgpuPresent && !_c.InUltimate ? $"dGPU Off · Fan {gpu.Duty}%"
-            : gpu.Temp > 0 ? $"GPU {gpu.Temp}°C · Fan {gpu.Duty}%"
+            : gpu.Temp > 0 || _c.GpuLoad.Usage >= 0 ? Readout("GPU", _c.GpuLoad, gpu)
             : _c.InUltimate ? "dGPU Only" : "dGPU On";
+    }
+
+    /// <summary>"CPU 12% · 3.4 GHz · 53°C · Fan 30%", leaving out what isn't known.</summary>
+    private static string Readout(string name, (int Usage, int Mhz) load, FanInfo fan)
+    {
+        var parts = new List<string>();
+        if (load.Usage >= 0) parts.Add($"{name} {load.Usage}%");
+        if (load.Mhz > 0) parts.Add($"{load.Mhz / 1000.0:0.0} GHz");
+        if (fan.Temp > 0) parts.Add(parts.Count == 0 ? $"{name} {fan.Temp}°C" : $"{fan.Temp}°C");
+        if (fan.Temp > 0) parts.Add($"Fan {fan.Duty}%");
+        return string.Join(" · ", parts);
     }
 
     public void ShowNearTray()

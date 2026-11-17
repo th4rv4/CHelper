@@ -25,6 +25,9 @@ public sealed class Controller
     public Charger.State Charge { get; private set; }
     public FanInfo CpuFan { get; private set; }
     public FanInfo GpuFan { get; private set; }
+    /// <summary>Usage % and clock MHz, read while the window is open; -1 when unknown (or the dGPU is off).</summary>
+    public (int Usage, int Mhz) CpuLoad { get; private set; } = (-1, -1);
+    public (int Usage, int Mhz) GpuLoad { get; private set; } = (-1, -1);
     public Battery.Status? BatteryNow { get; private set; }
     public double BatteryHealth { get; private set; } = -1;
 
@@ -422,12 +425,23 @@ public sealed class Controller
         catch (Exception ex) { Log.Error("MUX read failed", ex); }
     }
 
+    private int _sensing;
+
     public void RefreshSensors()
     {
+        if (Interlocked.Exchange(ref _sensing, 1) == 1) return; // a slow read is still running
         try
         {
             CpuFan = Clevo.ReadCpuFan();
             GpuFan = Clevo.ReadGpuFan();
+            CpuLoad = CpuStats.Read();
+            // Only ask the NVIDIA driver while the dGPU is on and not being switched.
+            if (DgpuPresent && !GpuBusy) GpuLoad = NvGpu.Read();
+            else
+            {
+                GpuLoad = (-1, -1);
+                NvGpu.Reset();
+            }
             try
             {
                 BatteryNow = Battery.Read();
@@ -439,6 +453,10 @@ public sealed class Controller
         catch (Exception ex)
         {
             Log.Error("Sensor read failed", ex);
+        }
+        finally
+        {
+            Volatile.Write(ref _sensing, 0);
         }
     }
 
