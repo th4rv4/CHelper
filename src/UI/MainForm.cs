@@ -32,6 +32,9 @@ public sealed class MainForm : Form
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
     private readonly ToolTip _tips = new() { InitialDelay = 400 };
     private FanCurveForm _curves;
+    private TileButton _soundBtn;
+    private bool _soundFound; // kept here so the button survives the window being rebuilt
+    private SoundForm _sound;
 
     private static readonly KbEffect[] EffectOrder = { KbEffect.Static, KbEffect.Breathing, KbEffect.ColorCycle, KbEffect.CpuHeat };
     private static readonly KbSpeed[] SpeedOrder = { KbSpeed.Slow, KbSpeed.Normal, KbSpeed.Fast };
@@ -111,6 +114,7 @@ public sealed class MainForm : Form
             _startupEnabled = Startup.IsEnabled();
             OnStateChanged();
         });
+        _ = CheckSoundAsync();
     }
 
     private int S(float v) => (int)Math.Round(v * DeviceDpi / 96f * Theme.MainScale);
@@ -396,6 +400,22 @@ public sealed class MainForm : Form
         _updateBtn.Click += (_, _) => _ = InstallUpdateAsync();
         Controls.Add(_updateBtn);
 
+        // Sound panel (Sound Blaster Studio); only on laptops where Creative's sound engine is installed.
+        _soundBtn = new TileButton
+        {
+            Text = "Sound",
+            IconName = "speaker",
+            IconSize = 14,
+            Vertical = false,
+            Borderless = true,
+            Font = _fSmall,
+            Location = new Point(S(Pad + 196), S(_y + 2)),
+            Size = new Size(S(80), S(30)),
+            Visible = _soundFound,
+        };
+        _soundBtn.Click += (_, _) => OpenSound();
+        Controls.Add(_soundBtn);
+
         var log = new TileButton
         {
             Text = "Log",
@@ -404,7 +424,7 @@ public sealed class MainForm : Form
             Vertical = false,
             Borderless = true,
             Font = _fSmall,
-            Location = new Point(S(Pad + 196), S(_y + 2)),
+            Location = new Point(S(Pad + 196 + (_soundFound ? 88 : 0)), S(_y + 2)),
             Size = new Size(S(64), S(30)),
         };
         log.Click += (_, _) => OpenLog();
@@ -586,6 +606,44 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log.Error("Checking for the stock software failed", ex);
+        }
+    }
+
+    /// <summary>Shows the Sound button when Creative's sound engine (Sound Blaster Studio) is on this laptop.</summary>
+    private async Task CheckSoundAsync()
+    {
+        try
+        {
+            bool found = await Task.Run(() => Sound.SoundBlaster.Installed());
+            if (IsDisposed || found == _soundFound) return;
+            _soundFound = found;
+            Log.Info(found ? "Sound Blaster Studio found" : "Sound Blaster Studio not found");
+            if (_soundBtn is not { IsDisposed: false }) return;
+            _soundBtn.Visible = found;
+            // Log moves right to make room for the Sound button.
+            foreach (Control c in Controls)
+                if (c is TileButton { Text: "Log" } log) log.Left = _soundBtn.Left + (found ? S(88) : 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Checking for Sound Blaster failed", ex);
+        }
+    }
+
+    private void OpenSound()
+    {
+        if (_sound == null || _sound.IsDisposed)
+        {
+            _sound = new SoundForm();
+            var wa = Screen.FromControl(this).WorkingArea;
+            _sound.Location = new Point(
+                Math.Max(wa.Left, Left - _sound.Width - S(12)),
+                Math.Clamp(Top, wa.Top, Math.Max(wa.Top, wa.Bottom - _sound.Height)));
+            _sound.Show(this);
+        }
+        else
+        {
+            _sound.Activate();
         }
     }
 
