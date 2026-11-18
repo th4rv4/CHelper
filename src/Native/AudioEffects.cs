@@ -23,7 +23,7 @@ public static class AudioEffects
 
     private const int ClsctxInproc = 1;
     private const int StgmRead = 0, StgmReadWrite = 2;
-    private const ushort VtEmpty = 0, VtR4 = 4, VtBool = 11, VtUi4 = 19, VtClsid = 72;
+    private const ushort VtEmpty = 0, VtR4 = 4, VtBool = 11, VtUi4 = 19, VtLpwstr = 31, VtClsid = 72;
 
     private static readonly PropKey FriendlyName = new("a45c254e-df1c-4efd-8020-67d146a850e0", 14);
     private static readonly PropKey FormFactor = new("1da5d803-d492-4edd-8c23-e0c0ffee7f0e", 0);
@@ -131,6 +131,25 @@ public static class AudioEffects
         {
             return false;
         }
+    }
+
+    /// <summary>Every output or input (plugged in or not) that has the effect attached.</summary>
+    public static List<Endpoint> EndpointsWith(Flow flow, string effectClsid)
+    {
+        var list = new List<Endpoint>();
+        try
+        {
+            using var root = Registry.LocalMachine.OpenSubKey($@"{MmDevices}\{flow}");
+            if (root == null) return list;
+            string prefix = flow == Flow.Render ? "{0.0.0.00000000}." : "{0.0.1.00000000}.";
+            foreach (var guid in root.GetSubKeyNames())
+                if (HasEffect(flow, guid, effectClsid)) list.Add(new Endpoint(prefix + guid, guid, 10, flow));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Listing audio devices failed", ex);
+        }
+        return list;
     }
 
     /// <summary>True when any active output has the effect attached (used to decide whether to offer it at all).</summary>
@@ -251,6 +270,33 @@ public static class AudioEffects
             bool ok = value.vt is VtBool or VtR4 or 3 or 19;
             if (!ok) PropVariantClear(ref value);
             return ok && value.vt != VtEmpty;
+        }
+
+        /// <summary>
+        /// Rewrites a text setting in every context where it is set (used to move a file the effect loads).
+        /// Returns how many were changed.
+        /// </summary>
+        public int RewriteText(string fmtid, uint pid, Func<string, string> map)
+        {
+            int changed = 0;
+            var key = new PropKey(fmtid, pid);
+            foreach (var ps in _stores)
+            {
+                if (ps.GetValue(ref key, out var v) != 0) continue;
+                string old = v.vt == VtLpwstr ? Marshal.PtrToStringUni(v.p) : null;
+                PropVariantClear(ref v);
+                string now = old == null ? null : map(old);
+                if (now == null || now == old) continue;
+                var nv = new PropVariant { vt = VtLpwstr, p = Marshal.StringToCoTaskMemUni(now) };
+                try
+                {
+                    int hr = ps.SetValue(ref key, ref nv);
+                    if (hr == 0) changed++;
+                    else Log.Info($"Effect setting {fmtid},{pid} not saved (0x{hr:X8})");
+                }
+                finally { PropVariantClear(ref nv); }
+            }
+            return changed;
         }
 
         /// <summary>Stores an on/off value. Call Commit once a group of changes is done.</summary>

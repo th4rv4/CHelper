@@ -31,7 +31,8 @@ public sealed class SoundForm : Form
     private const string Always = "always";
 
     private Font _fHead, _fBody, _fSmall;
-    private Label _status;
+    private Label _status, _footerNote;
+    private TileButton _removeCreative;
     private SegRow _tabs;
     private Panel _playback, _micPanel;
     private Label _outMissing, _micMissing;
@@ -70,6 +71,7 @@ public sealed class SoundForm : Form
         BuildUi();
         ApplyScale(this);
         OpenDevices();
+        ShowRemoveCreative();
         ShowTab(0);
         _poll.Tick += (_, _) => Poll();
         _poll.Start();
@@ -274,14 +276,32 @@ public sealed class SoundForm : Form
             BackColor = Theme.Line,
         });
         y += 12;
-        Controls.Add(new Label
+        _footerNote = new Label
         {
             Text = "Changes apply right away",
             Location = new Point(S(Pad), S(y + 8)),
-            AutoSize = true,
+            Size = new Size(S(ContentWidth - 130), S(18)),
+            AutoEllipsis = true,
             ForeColor = Theme.Muted,
             Font = _fSmall,
-        });
+        };
+        Controls.Add(_footerNote);
+
+        // Remove Creative App: only while it's still installed; the Sound panel does everything it did.
+        _removeCreative = new TileButton
+        {
+            Text = "Remove Creative App",
+            Vertical = false,
+            Font = _fSmall,
+            Accent = Theme.Turbo,
+            Location = new Point(S(Pad), S(y + 2)),
+            Size = new Size(S(170), S(28)),
+            Visible = false,
+        };
+        _removeCreative.Click += (_, _) => _ = RemoveCreativeAsync();
+        new ToolTip().SetToolTip(_removeCreative,
+            "Uninstalls Creative App. The sound drivers, Creative's sound engine and the speaker tuning stay.");
+        Controls.Add(_removeCreative);
         var reset = new TileButton
         {
             Text = "Reset All",
@@ -323,6 +343,44 @@ public sealed class SoundForm : Form
             if (_mic.Available) _mic.Reset();
             Log.Info("Sound settings reset to factory defaults");
         });
+    }
+
+    private void ShowRemoveCreative()
+    {
+        bool installed = CreativeApp.Installed;
+        _removeCreative.Visible = installed;
+        _footerNote.Visible = !installed;
+    }
+
+    private async Task RemoveCreativeAsync()
+    {
+        if (MessageBox.Show(this,
+                "Uninstall Creative App?\n\n" +
+                "The Sound panel does everything it did. Removed: Creative App, its background services and the " +
+                "Dolby Digital Live / DTS Connect packs it added, with leftover files moved to the Recycle Bin.\n\n" +
+                "Kept: the sound drivers, Creative's sound engine and the speaker tuning, so the sound stays the same.",
+                "Remove Creative App", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+
+        _removeCreative.Visible = false;
+        _footerNote.Visible = true;
+        _footerNote.ForeColor = Theme.Warn;
+        void Progress(string text) { if (!IsDisposed) BeginInvoke(new Action(() => _footerNote.Text = text)); }
+        string result;
+        try
+        {
+            result = await Task.Run(() => CreativeApp.Remove(Progress));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Removing Creative App failed", ex);
+            result = "Removing Creative App failed. Check the log.";
+        }
+        if (IsDisposed) return;
+        _footerNote.ForeColor = Theme.Muted;
+        _footerNote.Text = "Changes apply right away";
+        ShowRemoveCreative();
+        OpenDevices();
+        MessageBox.Show(this, result, "Remove Creative App", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private int BuildPlayback()

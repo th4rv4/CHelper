@@ -102,6 +102,7 @@ On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appea
 - **Microphone volume** slider (Windows' own level)
 - Changes apply instantly, the same way Creative App saves them, so Creative App isn't needed
 - **Reset All** puts every Sound setting back to Creative's factory defaults (Built-In Speakers, Gaming, no boost, microphone effects off)
+- **Remove Creative App**: shown in the Sound panel while Creative App is installed. Uninstalls it with its background services and the Dolby Digital Live / DTS Connect packs, and moves its leftover files to the Recycle Bin. The sound drivers, Creative's sound engine and Speaker EQ Clevo stay, and the speaker tuning files Creative App kept in its own folder are copied to `C:\ProgramData\CHelper\Sound` first, so the sound doesn't change
 
 ### ⌨️ Keybindings
 
