@@ -386,8 +386,8 @@ public sealed class SoundForm : Form
             card.Controls.Add(new Label
             {
                 Text = "Volume Boost",
-                Location = new Point(S(14), 0),
-                Size = new Size(S(150), S(RowH)),
+                Location = new Point(S(14), 2),
+                Size = new Size(S(150), S(RowH) - 4),
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Theme.Text,
                 BackColor = Theme.Card,
@@ -475,8 +475,8 @@ public sealed class SoundForm : Form
             card.Controls.Add(new Label
             {
                 Text = "Volume",
-                Location = new Point(S(14), 0),
-                Size = new Size(S(150), S(RowH)),
+                Location = new Point(S(14), 2),
+                Size = new Size(S(150), S(RowH) - 4),
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Theme.Text,
                 BackColor = Theme.Card,
@@ -587,8 +587,8 @@ public sealed class SoundForm : Form
     private void NameLabel(Control card, string text) => card.Controls.Add(new Label
     {
         Text = text,
-        Location = new Point(S(62), 0),
-        Size = new Size(S(110), S(RowH)),
+        Location = new Point(S(62), 2),
+        Size = new Size(S(110), S(RowH) - 4),
         TextAlign = ContentAlignment.MiddleLeft,
         ForeColor = Theme.Text,
         BackColor = Theme.Card,
@@ -599,8 +599,8 @@ public sealed class SoundForm : Form
     {
         var l = new Label
         {
-            Location = new Point(S(ContentWidth - 62), 0),
-            Size = new Size(S(50), S(RowH)),
+            Location = new Point(S(ContentWidth - 62), 2),
+            Size = new Size(S(50), S(RowH) - 4),
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Theme.Text,
             BackColor = Theme.Card,

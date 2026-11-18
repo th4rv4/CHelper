@@ -22,10 +22,10 @@ public sealed class SoundBlaster : IDisposable
     private static readonly Dictionary<Effect, (string On, string Level, float Scale)> Keys = new()
     {
         [Effect.Surround] = ("5b4777a4-8ad4-4d34-893a-df34da0e56ca", "a5a78ea4-c156-4db7-85aa-81cff1c3f192", 100f),
-        [Effect.Crystalizer] = ("3cd83c04-868f-4f08-8d75-b4625ffe3b31", "a79717e9-81cf-4272-adc6-d12b69b389a0", 100f),
+        [Effect.Crystalizer] = ("3cd83c04-868f-4f08-8d75-b4625ffe3b31", "0f03f0bb-72c7-4ec1-8422-7b8d7410694a", 100f),
         [Effect.Bass] = ("f67cf426-f8cb-4a40-bdac-580802e3e193", "dd527e35-21a5-4ca6-ab90-8ad464fb55e3", 1f),
         [Effect.SmartVolume] = ("9ad782d7-f46e-465c-8df5-3cda75424987", "80b0c7bb-0989-434e-af5b-fb9020f471b3", 100f),
-        [Effect.DialogPlus] = ("ea3137f9-be10-4eaa-8fce-a36988bca7dd", "0f03f0bb-72c7-4ec1-8422-7b8d7410694a", 100f),
+        [Effect.DialogPlus] = ("ea3137f9-be10-4eaa-8fce-a36988bca7dd", "a79717e9-81cf-4272-adc6-d12b69b389a0", 100f),
     };
 
     private const string Crossover = "3f23dbc5-12d1-4d62-89ed-bc458337e0fc";
