@@ -65,6 +65,80 @@ public static class AudioEffects
         }
     }
 
+    private static readonly PropKey DisableSysFx = new("1da5d803-d492-4edd-8c23-e0c0ffee7f0e", 5);
+
+    /// <summary>
+    /// Windows' "Audio enhancements" switch for the device. When off, Windows doesn't load the device's sound
+    /// effects into the audio path at all. Null when it can't be read.
+    /// </summary>
+    public static bool? EnhancementsOff(Endpoint ep)
+    {
+        bool? result = null;
+        WithDevice(ep, dev =>
+        {
+            if (dev.OpenPropertyStore(StgmRead, out var props) != 0 || props == null) return;
+            try
+            {
+                var k = DisableSysFx;
+                if (props.GetValue(ref k, out var v) == 0)
+                {
+                    result = v.vt != VtEmpty && v.intVal != 0;
+                    PropVariantClear(ref v);
+                }
+            }
+            finally { Marshal.ReleaseComObject(props); }
+        });
+        return result;
+    }
+
+    /// <summary>Turns Windows' audio enhancements for the device off (true) or on. Returns false if Windows refused.</summary>
+    public static bool SetEnhancementsOff(Endpoint ep, bool off)
+    {
+        bool ok = false;
+        WithDevice(ep, dev =>
+        {
+            int hr = dev.OpenPropertyStore(StgmReadWrite, out var props);
+            if (hr != 0 || props == null)
+            {
+                Log.Info($"Audio enhancements: can't open '{ep.Name}' for writing (0x{hr:X8})");
+                return;
+            }
+            try
+            {
+                var k = DisableSysFx;
+                var v = new PropVariant { vt = VtUi4, intVal = off ? 1 : 0 };
+                hr = props.SetValue(ref k, ref v);
+                if (hr == 0) hr = props.Commit();
+                ok = hr == 0;
+                Log.Info($"Audio enhancements {(off ? "off" : "on")} for '{ep.Name}': 0x{hr:X8}");
+            }
+            finally { Marshal.ReleaseComObject(props); }
+        });
+        return ok;
+    }
+
+    private static void WithDevice(Endpoint ep, Action<IMMDevice> use)
+    {
+        if (ep == null) return;
+        IMMDeviceEnumerator en = null;
+        IMMDevice dev = null;
+        try
+        {
+            en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (en.GetDevice(ep.Id, out dev) != 0 || dev == null) return;
+            use(dev);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Audio device access failed", ex);
+        }
+        finally
+        {
+            if (dev != null) Marshal.ReleaseComObject(dev);
+            if (en != null) Marshal.ReleaseComObject(en);
+        }
+    }
+
     /// <summary>Windows' own volume for the device, 0-100, or null when it can't be read.</summary>
     public static int? GetVolume(Endpoint ep)
     {
@@ -133,7 +207,7 @@ public static class AudioEffects
         }
     }
 
-    /// <summary>Every output or input (plugged in or not) that has the effect attached.</summary>
+    /// <summary>Every output or input that has the effect attached, plugged in or not.</summary>
     public static List<Endpoint> EndpointsWith(Flow flow, string effectClsid)
     {
         var list = new List<Endpoint>();
@@ -143,7 +217,13 @@ public static class AudioEffects
             if (root == null) return list;
             string prefix = flow == Flow.Render ? "{0.0.0.00000000}." : "{0.0.1.00000000}.";
             foreach (var guid in root.GetSubKeyNames())
-                if (HasEffect(flow, guid, effectClsid)) list.Add(new Endpoint(prefix + guid, guid, 10, flow));
+            {
+                // Active (1) or unplugged (8); disabled and leftover devices are skipped.
+                using var dev = root.OpenSubKey(guid);
+                int state = dev?.GetValue("DeviceState") is int st ? st & 0xF : 0;
+                if (state is 1 or 8 && HasEffect(flow, guid, effectClsid))
+                    list.Add(new Endpoint(prefix + guid, guid, 10, flow));
+            }
         }
         catch (Exception ex)
         {

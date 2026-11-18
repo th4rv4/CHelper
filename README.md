@@ -94,13 +94,14 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 
 ### 🔊 Sound (Sound Blaster Studio)
 
-On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appears in the footer. It opens a small panel that replaces Creative App:
+On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appears in the footer. It switches the window to the Sound page (**Home** or Esc goes back), which replaces Creative App:
 
 - **Playback**: Sound Mode (**Gaming**, **Music**, **Movies**, **Streaming**), the Acoustic Engine effects (Surround, Crystalizer, Bass, Smart Volume with Night / Normal / Loud, Dialog+), a 10-band **Equalizer** with Creative's presets, and **Volume Boost** up to 200 % (louder than Windows' 100 %; Smart Volume stays on to keep peaks from crackling)
 - **Microphone** (CrystalVoice): Noise Reduction, Echo Cancellation, Smart Volume, Focus, Voice Morph and Mic Equalizer
 - **Listening On**: Built-In Speakers, Headphones or Line Out (external speakers in the jack), chosen by hand like in Creative App. Headphones get the headphone version of each preset and headphone surround. Bluetooth, USB and HDMI audio don't go through Sound Blaster, so the panel says so instead of showing controls that do nothing
 - **Microphone volume** slider (Windows' own level)
 - Changes apply instantly, the same way Creative App saves them, so Creative App isn't needed
+- **Sound Blaster** master switch: turns Windows' audio enhancements off for every speaker, headphone and microphone with Creative's engine, so audio plays with no effects and the engine isn't loaded at all. Your settings are kept for when you switch it back on
 - **Reset All** puts every Sound setting back to Creative's factory defaults (Built-In Speakers, Gaming, no boost, microphone effects off)
 - **Remove Creative App**: shown in the Sound panel while Creative App is installed. Uninstalls it with its background services and the Dolby Digital Live / DTS Connect packs, and moves its leftover files to the Recycle Bin. The sound drivers, Creative's sound engine and Speaker EQ Clevo stay, and the speaker tuning files Creative App kept in its own folder are copied to `C:\ProgramData\CHelper\Sound` first, so the sound doesn't change
 

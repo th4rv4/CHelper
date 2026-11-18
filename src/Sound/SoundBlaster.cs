@@ -95,6 +95,28 @@ public sealed class SoundBlaster : IDisposable
 
     public void Dispose() => _store?.Dispose();
 
+    /// <summary>The master switch is off: Windows' audio enhancements are off on the current output.</summary>
+    public static bool EngineOff()
+    {
+        var ep = AudioEffects.Default(AudioEffects.Flow.Render);
+        return ep != null && AudioEffects.HasEffect(ep, EngineClsid) && AudioEffects.EnhancementsOff(ep) == true;
+    }
+
+    /// <summary>
+    /// Master switch: turns Windows' audio enhancements on or off for every speaker, headphone and microphone that
+    /// has Creative's engine, so with it off the engine isn't loaded at all. Settings are kept. Returns how many
+    /// devices Windows refused.
+    /// </summary>
+    public static int SetEngine(bool on)
+    {
+        int failed = 0;
+        foreach (var flow in new[] { AudioEffects.Flow.Render, AudioEffects.Flow.Capture })
+            foreach (var ep in AudioEffects.EndpointsWith(flow, EngineClsid))
+                if (!AudioEffects.SetEnhancementsOff(ep, !on)) failed++;
+        Log.Info($"Sound Blaster engine turned {(on ? "on" : "off")}{(failed > 0 ? $", {failed} devices refused" : "")}");
+        return failed;
+    }
+
     /// <summary>
     /// False on a laptop where Creative App never ran: the engine has no saved settings for this device yet.
     /// The Sound panel then writes Creative's defaults once, so it never depends on Creative App having set things up.

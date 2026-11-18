@@ -4,15 +4,15 @@ using static CHelper.Sound.SoundBlaster;
 namespace CHelper.UI;
 
 /// <summary>
-/// Sound panel: Sound Blaster Studio playback effects (Sound Mode, Acoustic Engine, Volume Boost, Equalizer)
-/// and CrystalVoice for the microphone. It follows whatever output and microphone Windows is using,
-/// and every change applies straight away.
+/// Sound page, shown inside the main window: Sound Blaster Studio playback effects (Sound Mode, Acoustic Engine,
+/// Volume Boost, Equalizer) and CrystalVoice for the microphone, plus a master switch for the whole engine.
+/// It follows whatever output and microphone Windows is using, and every change applies straight away.
 /// </summary>
-public sealed class SoundForm : Form
+public sealed class SoundPage : Panel
 {
-    private const int ContentWidth = 460;
-    private const int Pad = 18;
-    private const int RowH = 42, Gap = 6;
+    private readonly int ContentWidth;
+    private readonly int Pad;
+    private const int RowH = 38, Gap = 6;
 
     private static readonly (Effect Effect, string Name)[] Effects =
     {
@@ -55,26 +55,29 @@ public sealed class SoundForm : Form
     private Label _nrValue, _focusValue;
     private TileButton _vmPreset, _meqPreset;
 
-    public SoundForm()
+    private Label _title, _offNote;
+    private ToggleSwitch _master;
+    private TileButton _reset;
+
+    /// <summary>Height the page needs (before DPI scaling); it scrolls if the window is shorter.</summary>
+    public int PreferredContentHeight { get; private set; }
+
+    /// <summary>Raised when the user wants the home page back (Home button).</summary>
+    public event Action HomeRequested;
+
+    public SoundPage(int contentWidth, int pad)
     {
-        Text = "Sound";
-        Icon = Theme.AppIcon;
+        ContentWidth = contentWidth;
+        Pad = pad;
         BackColor = Theme.Back;
         ForeColor = Theme.Text;
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        StartPosition = FormStartPosition.Manual;
-        AutoScaleMode = AutoScaleMode.None;
+        DoubleBuffered = true;
+        AutoScroll = true; // only kicks in on a window too short for the page
 
         BuildUi();
         ApplyScale(this);
-        OpenDevices();
-        ShowRemoveCreative();
         ShowTab(0);
         _poll.Tick += (_, _) => Poll();
-        _poll.Start();
     }
 
     private int S(float v) => (int)Math.Round(v * DeviceDpi / 96f * Theme.MainScale);
@@ -90,31 +93,31 @@ public sealed class SoundForm : Form
         }
     }
 
-    protected override void WndProc(ref Message m)
+    protected override void OnVisibleChanged(EventArgs e)
     {
-        // Keyboard-layout changes go straight to Windows (see InputLanguageGuard).
-        if (InputLanguageGuard.IsLayoutMessage(m.Msg)) { DefWndProc(ref m); return; }
-        base.WndProc(ref m);
+        base.OnVisibleChanged(e);
+        if (Visible)
+        {
+            OpenDevices();
+            ShowRemoveCreative();
+            _poll.Start();
+        }
+        else
+        {
+            _poll.Stop();
+        }
     }
 
-    protected override void OnHandleCreated(EventArgs e)
+    protected override void Dispose(bool disposing)
     {
-        base.OnHandleCreated(e);
-        Theme.DarkTitleBar(Handle);
-    }
-
-    protected override void OnActivated(EventArgs e)
-    {
-        base.OnActivated(e);
-        RefreshValues();
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        _poll.Stop();
-        _out?.Dispose();
-        _mic?.Dispose();
-        base.OnFormClosed(e);
+        if (disposing)
+        {
+            _poll.Stop();
+            _poll.Dispose();
+            _out?.Dispose();
+            _mic?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     // ---------------- devices ----------------
@@ -157,8 +160,14 @@ public sealed class SoundForm : Form
         if (_out == null || Dragging) return;
         SuspendLayout();
 
-        string outName = _out.Device?.Name ?? "No output";
-        _status.Text = _out.Available ? $"{outName} · Sound Blaster Studio" : outName;
+        bool engineOn = !SoundBlaster.EngineOff();
+        _master.On = engineOn;
+        _offNote.Visible = !engineOn;
+        _tabs.Visible = _reset.Visible = engineOn;
+        _playback.Visible = engineOn && _tabs[0].Active;
+        _micPanel.Visible = engineOn && _tabs[1].Active;
+
+        _status.Text = _out.Device?.Name ?? "No output";
         SetAvailable(_playback, _outMissing, _out.Available);
         if (_out.Available)
         {
@@ -244,16 +253,65 @@ public sealed class SoundForm : Form
         _fSmall = Theme.Px(S(11.5f));
         int y = 12;
 
-        _status = new Label
+        // Home | Sound ............ Sound Blaster [switch]
+        var home = new TileButton
         {
+            Text = "Home",
+            IconName = "back",
+            IconSize = 16,
+            Vertical = false,
+            Font = _fBody,
             Location = new Point(S(Pad), S(y)),
-            Size = new Size(S(ContentWidth), S(18)),
+            Size = new Size(S(104), S(34)),
+        };
+        home.Click += (_, _) => HomeRequested?.Invoke();
+        new ToolTip().SetToolTip(home, "Back to the main page (Esc)");
+        Controls.Add(home);
+        _title = new Label
+        {
+            Text = "Sound",
+            Location = new Point(S(Pad + 120), S(y + 5)),
+            AutoSize = true,
+            ForeColor = Theme.Text,
+            Font = Theme.Px(S(17f), semibold: true),
+        };
+        Controls.Add(_title);
+        _master = new ToggleSwitch
+        {
+            Location = new Point(S(Pad + ContentWidth - 44), S(y + 6)),
+            Size = new Size(S(44), S(24)),
+            BackColor = Theme.Back,
+        };
+        _master.Toggled += SetEngine;
+        Controls.Add(_master);
+        var masterLabel = new Label
+        {
+            Text = "Sound Blaster",
+            Location = new Point(S(Pad + ContentWidth - 44 - 130), S(y + 9)),
+            Size = new Size(S(120), S(18)),
+            TextAlign = ContentAlignment.TopRight,
             ForeColor = Theme.Muted,
             Font = _fSmall,
-            AutoEllipsis = true,
         };
-        Controls.Add(_status);
-        y += 24;
+        Controls.Add(masterLabel);
+        new ToolTip().SetToolTip(_master, "Turns Creative's sound engine on or off for every speaker, headphone and microphone");
+        y += 34 + 16;
+
+        _offNote = new Label
+        {
+            Text = "Sound Blaster Is Off\n\n" +
+                   "Speakers, headphones and the microphone play and record without any effects. " +
+                   "Windows doesn't load Creative's sound engine at all until you turn it back on.\n\n" +
+                   "Your settings are kept for when you switch it back on.",
+            Location = new Point(S(Pad), S(y)),
+            Size = new Size(S(ContentWidth), S(150)),
+            Padding = new Padding(S(16)),
+            BackColor = Theme.Card,
+            ForeColor = Theme.Muted,
+            Font = _fBody,
+            Visible = false,
+        };
+        Controls.Add(_offNote);
 
         _tabs = new SegRow(S(34), S(8), _fBody, false, 16,
             new("Playback", null, Theme.Eco), new("Microphone", null, Theme.Eco))
@@ -263,7 +321,7 @@ public sealed class SoundForm : Form
         };
         _tabs.ButtonClicked += ShowTab;
         Controls.Add(_tabs);
-        y += 34 + 16;
+        y += 34 + 12;
 
         int playbackH = BuildPlayback();
         int micH = BuildMicrophone();
@@ -274,7 +332,7 @@ public sealed class SoundForm : Form
             p.Size = new Size(S(ContentWidth), S(panelH));
             Controls.Add(p);
         }
-        y += panelH + 8;
+        y += panelH + 4;
 
         // Footer
         Controls.Add(new Panel
@@ -310,7 +368,7 @@ public sealed class SoundForm : Form
         new ToolTip().SetToolTip(_removeCreative,
             "Uninstalls Creative App. The sound drivers, Creative's sound engine and the speaker tuning stay.");
         Controls.Add(_removeCreative);
-        var reset = new TileButton
+        var reset = _reset = new TileButton
         {
             Text = "Reset All",
             Vertical = false,
@@ -320,9 +378,10 @@ public sealed class SoundForm : Form
         };
         reset.Click += (_, _) => ResetAll();
         Controls.Add(reset);
-        y += 32 + 14;
+        y += 32 + 10;
 
-        ClientSize = new Size(S(ContentWidth + Pad * 2), S(y));
+        Size = new Size(S(ContentWidth + Pad * 2), S(y));
+        PreferredContentHeight = y;
     }
 
     private void ShowTab(int index)
@@ -330,6 +389,17 @@ public sealed class SoundForm : Form
         _tabs.Select(index);
         _playback.Visible = index == 0;
         _micPanel.Visible = index == 1;
+    }
+
+    /// <summary>Master switch: Windows' audio enhancements on or off for every device with Creative's engine.</summary>
+    private void SetEngine(bool on)
+    {
+        int failed = SoundBlaster.SetEngine(on);
+        if (failed > 0)
+            MessageBox.Show(this,
+                "Windows didn't allow C-Helper to change this for every device. The log has the details.",
+                "Sound Blaster", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        OpenDevices();
     }
 
     /// <summary>Puts every Sound setting back to Creative's factory defaults, in case something sounds wrong.</summary>
@@ -397,6 +467,7 @@ public sealed class SoundForm : Form
         int y = 0;
 
         Heading(_playback, "Listening On", y);
+        _status = HeadingHint(_playback, y);
         y += 24;
         _kinds = new SegRow(S(34), S(8), _fBody, false, 16,
             new("Built-In Speakers", null, Theme.Eco), new("Headphones", null, Theme.Eco), new("Line Out", null, Theme.Eco))
@@ -407,7 +478,7 @@ public sealed class SoundForm : Form
         _kinds.ButtonClicked += i => Change(() => _out.SetKind(KindOrder[i]));
         new ToolTip().SetToolTip(_kinds[2], "External speakers plugged into the headphone jack");
         _playback.Controls.Add(_kinds);
-        y += 34 + 16;
+        y += 34 + 12;
 
         Heading(_playback, "Sound Mode", y);
         y += 24;
@@ -423,7 +494,7 @@ public sealed class SoundForm : Form
             _out.ApplyMode(SoundPresets.Modes[i]);
         });
         _playback.Controls.Add(_modes);
-        y += 34 + 16;
+        y += 34 + 12;
 
         Heading(_playback, "Acoustic Engine", y);
         _outKind = HeadingHint(_playback, y);
@@ -477,7 +548,7 @@ public sealed class SoundForm : Form
             _boost.ValueCommitted += v => Change(() => _out.SetBoost(v));
             new ToolTip().SetToolTip(_boost,
                 "Louder than Windows' 100%. Smart Volume stays on above 100% to keep peaks from crackling.");
-            y += RowH + 16;
+            y += RowH + 12;
         }
 
         Heading(_playback, "Equalizer", y);
@@ -511,13 +582,13 @@ public sealed class SoundForm : Form
         _eq = new EqGraph
         {
             Location = new Point(0, S(y)),
-            Size = new Size(S(ContentWidth), S(150)),
+            Size = new Size(S(ContentWidth), S(124)),
             BackColor = Theme.Back,
             Font = _fSmall,
         };
         _eq.BandsCommitted += bands => Change(() => _out.SetBands(bands));
         _playback.Controls.Add(_eq);
-        y += 150;
+        y += 124;
 
         _outMissing = Missing(_playback, 30,
             "Sound Blaster isn't available on this output.\n\n" +
@@ -754,7 +825,7 @@ public sealed class SoundForm : Form
         return b;
     }
 
-    private ContextMenuStrip DarkMenu() => new()
+    private ContextMenuStrip DarkMenu() => new SafeContextMenu
     {
         Renderer = new ToolStripProfessionalRenderer(new DarkMenuColors()),
         BackColor = Theme.Card,

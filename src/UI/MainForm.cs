@@ -34,7 +34,8 @@ public sealed class MainForm : Form
     private FanCurveForm _curves;
     private TileButton _soundBtn;
     private bool _soundFound; // kept here so the button survives the window being rebuilt
-    private SoundForm _sound;
+    private SoundPage _soundPage;
+    private int _footerTop; // where the footer starts; the Sound page fills the window above it
 
     private static readonly KbEffect[] EffectOrder = { KbEffect.Static, KbEffect.Breathing, KbEffect.ColorCycle, KbEffect.CpuHeat };
     private static readonly KbSpeed[] SpeedOrder = { KbSpeed.Slow, KbSpeed.Normal, KbSpeed.Fast };
@@ -148,13 +149,16 @@ public sealed class MainForm : Form
         base.OnDpiChanged(e);
         // Moved to a monitor with a different scale: rebuild at the new size.
         Log.Info($"Window rebuilt for {DeviceDpi} DPI");
+        bool soundOpen = _soundPage is { Visible: true };
         SuspendLayout();
         var old = Controls.Cast<Control>().ToList();
         Controls.Clear();
         old.ForEach(c => c.Dispose());
+        _soundPage = null;
         BuildUi();
         ApplyScale(this);
         ResumeLayout();
+        if (soundOpen) OpenSound();
         RefreshState();
     }
 
@@ -164,6 +168,7 @@ public sealed class MainForm : Form
         {
             e.Cancel = true;
             Hide();
+            ShowHome(); // reopens on the home page
             return;
         }
         base.OnFormClosing(e);
@@ -364,6 +369,7 @@ public sealed class MainForm : Form
         _y += 46;
 
         // Footer
+        _footerTop = _y;
         Controls.Add(new Panel
         {
             Location = new Point(0, S(_y)),
@@ -412,6 +418,7 @@ public sealed class MainForm : Form
             Location = new Point(S(Pad + 196), S(_y + 2)),
             Size = new Size(S(80), S(30)),
             Visible = _soundFound,
+            Accent = Theme.Eco,
         };
         _soundBtn.Click += (_, _) => OpenSound();
         Controls.Add(_soundBtn);
@@ -630,21 +637,41 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>Shows the Sound page in place of the home page; the footer stays. Clicking Sound again goes back.</summary>
     private void OpenSound()
     {
-        if (_sound == null || _sound.IsDisposed)
+        if (_soundPage is { Visible: true, IsDisposed: false })
         {
-            _sound = new SoundForm();
-            var wa = Screen.FromControl(this).WorkingArea;
-            _sound.Location = new Point(
-                Math.Max(wa.Left, Left - _sound.Width - S(12)),
-                Math.Clamp(Top, wa.Top, Math.Max(wa.Top, wa.Bottom - _sound.Height)));
-            _sound.Show(this);
+            ShowHome();
+            return;
         }
-        else
+        if (_soundPage == null || _soundPage.IsDisposed)
         {
-            _sound.Activate();
+            _soundPage = new SoundPage(ContentWidth, Pad) { Location = Point.Empty, Visible = false };
+            _soundPage.HomeRequested += ShowHome;
+            Controls.Add(_soundPage);
         }
+        _soundPage.Size = new Size(ClientSize.Width, S(_footerTop));
+        _soundPage.BringToFront();
+        _soundPage.Visible = true;
+        if (_soundBtn is { IsDisposed: false }) { _soundBtn.Borderless = false; _soundBtn.Active = true; }
+    }
+
+    private void ShowHome()
+    {
+        if (_soundPage is { IsDisposed: false }) _soundPage.Visible = false;
+        if (_soundBtn is { IsDisposed: false }) { _soundBtn.Borderless = true; _soundBtn.Active = false; _soundBtn.Invalidate(); }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        // Esc on the Sound page goes back home.
+        if (keyData == Keys.Escape && _soundPage is { Visible: true })
+        {
+            ShowHome();
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private void OpenCurves()
