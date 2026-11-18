@@ -95,6 +95,14 @@ public sealed class SoundBlaster : IDisposable
 
     public void Dispose() => _store?.Dispose();
 
+    /// <summary>
+    /// False on a laptop where Creative App never ran: the engine has no saved settings for this device yet.
+    /// The Sound panel then writes Creative's defaults once, so it never depends on Creative App having set things up.
+    /// </summary>
+    public bool HasSettings => !Available || (IsMicrophone
+        ? _store.GetBool(NoiseOn, 0) != null
+        : _store.GetBool(Keys[Effect.Surround].On, 0) != null && _store.GetFloat(Keys[Effect.Surround].Level, 0) != null);
+
     // ---------------- playback ----------------
 
     public bool IsOn(Effect e) => _store.GetBool(Keys[e].On, 0) ?? false;

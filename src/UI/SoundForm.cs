@@ -125,6 +125,14 @@ public sealed class SoundForm : Form
         _mic?.Dispose();
         _out = SoundBlaster.Output();
         _mic = SoundBlaster.Microphone();
+        // First use without Creative App ever installed: start from Creative's factory defaults.
+        foreach (var sb in new[] { _out, _mic })
+        {
+            if (sb.HasSettings) continue;
+            Log.Info($"No Sound Blaster settings yet for '{sb.Device?.Name}'; writing the defaults");
+            if (!sb.IsMicrophone) sb.SetKind(OutputKind.BuiltIn);
+            sb.Reset();
+        }
         Log.Info($"Sound panel: output '{_out.Device?.Name}' (Sound Blaster {(_out.Available ? "on" : "off")}), " +
                  $"microphone '{_mic.Device?.Name}' (CrystalVoice {(_mic.Available ? "on" : "off")})");
         RefreshValues();
