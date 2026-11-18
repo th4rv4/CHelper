@@ -52,6 +52,11 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
     /// <summary>Newest version the "Update Available" popup was shown for (shown once per version).</summary>
     public string UpdateNotified { get; set; }
+
+    /// <summary>Sound Mode last used on each Listening On choice (BuiltIn, Headphones, LineOut).</summary>
+    public Dictionary<string, int> SoundMode { get; set; } = new();
+    /// <summary>The user's tuning of each Sound Mode, per Listening On choice ("Headphones/Music"): effect values, EQ and Volume Boost.</summary>
+    public Dictionary<string, Dictionary<string, float>> SoundProfiles { get; set; } = new();
 }
 
 public static class Settings
@@ -99,6 +104,9 @@ public static class Settings
         }
         s.FanCurveCpu = s.FanCurveGpu = null;
         s.FanPreset = null;
+
+        s.SoundMode ??= new();
+        s.SoundProfiles ??= new();
 
         if (s.KeyboardTimeout is int old)
         {

@@ -97,6 +97,7 @@ Effects pause when the backlight timer turns the light off, and resume at the ne
 On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appears in the footer. It switches the window to the Sound page (**Home** or Esc goes back), which replaces Creative App:
 
 - **Playback**: Sound Mode (**Gaming**, **Music**, **Movies**, **Streaming**), the Acoustic Engine effects (Surround, Crystalizer, Bass, Smart Volume with Night / Normal / Loud, Dialog+), a 10-band **Equalizer** with Creative's presets, and **Volume Boost** up to 200 % (louder than Windows' 100 %; Smart Volume stays on to keep peaks from crackling)
+- **Remembered tuning**: each Sound Mode keeps your changes (Volume Boost, effect levels, Smart Volume mode, Equalizer). Tune Music to 200 %, switch to Streaming and back, and Music is still at 200 %. Built-In Speakers, Headphones and Line Out each remember their own mode and tuning too
 - **Microphone** (CrystalVoice): Noise Reduction, Echo Cancellation, Smart Volume, Focus, Voice Morph and Mic Equalizer
 - **Listening On**: Built-In Speakers, Headphones or Line Out (external speakers in the jack), chosen by hand like in Creative App. Headphones get the headphone version of each preset and headphone surround. Bluetooth, USB and HDMI audio don't go through Sound Blaster, so the panel says so instead of showing controls that do nothing
 - **Microphone volume** slider (Windows' own level)

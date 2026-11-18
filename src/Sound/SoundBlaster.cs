@@ -65,16 +65,23 @@ public sealed class SoundBlaster : IDisposable
 
     public bool Headphones => Kind == OutputKind.Headphones;
 
-    /// <summary>Switches between speakers and headphones; a Sound Mode in use is re-applied in that version.</summary>
+    /// <summary>
+    /// Switches between speakers, headphones and line out. Each one remembers its own Sound Mode and settings, so
+    /// headphones come back exactly as they were last used; the first time, the current mode is used in that version.
+    /// </summary>
     public void SetKind(OutputKind kind)
     {
-        int mode = Available ? CurrentMode() : -1;
+        var from = Kind;
+        int mode = Available ? ActiveMode : -1;
+        if (mode >= 0) SaveProfile(from, mode);
         Change(() =>
         {
             _store.Set(OutputKindKey, 0, (uint)kind);
             _store.Set(HeadphoneMode, 0, kind == OutputKind.Headphones);
         });
-        if (mode >= 0) ApplyMode(Modes[mode]);
+        if (kind == from) return;
+        int next = RememberedMode(kind) ?? mode;
+        if (next >= 0) LoadMode(next);
     }
 
     /// <summary>Creative's engine is attached to this device and its settings could be opened.</summary>
@@ -106,18 +113,65 @@ public sealed class SoundBlaster : IDisposable
     public static bool EngineOff() => File.Exists(OffFile);
 
     /// <summary>The on/off switches (and Volume Boost) that make up "no effects"; levels and presets stay as they are.</summary>
-    private (string Key, uint Index)[] Switches => IsMicrophone
-        ? new[] { (NoiseOn, 0u), (EchoOn, 0u), (Keys[Effect.SmartVolume].On, 0u), (MicFlags, 0u), (VoiceMorph, 99u), (EqOn, 0u) }
-        : Keys.Values.Select(k => (k.On, 0u)).Append((EqOn, 0u)).ToArray();
+    private (string Key, uint Index)[] Switches
+    {
+        get
+        {
+            var list = new List<(string Key, uint Index)>();
+            if (IsMicrophone)
+            {
+                list.Add((NoiseOn, 0));
+                list.Add((EchoOn, 0));
+                list.Add((Keys[Effect.SmartVolume].On, 0));
+                list.Add((MicFlags, 0));
+                list.Add((VoiceMorph, 99));
+            }
+            else
+            {
+                foreach (var k in Keys.Values) list.Add((k.On, 0));
+            }
+            list.Add((EqOn, 0));
+            return list.ToArray();
+        }
+    }
 
     private Dictionary<string, float> SaveSwitches()
     {
-        var saved = new Dictionary<string, float>();
-        if (!Available) return saved;
-        foreach (var (key, index) in Switches)
-            if (_store.GetBool(key, index) is bool on) saved[$"{key},{index}"] = on ? 1 : 0;
-        if (!IsMicrophone && _store.GetFloat(Preamp, 0) is float db) saved[$"{Preamp},0"] = db;
-        return saved;
+        var values = Capture(Switches);
+        if (!IsMicrophone && Available && _store.GetFloat(Preamp, 0) is float db) values[$"{Preamp},0"] = db;
+        return values;
+    }
+
+    /// <summary>Values that are stored as on/off; everything else is a number.</summary>
+    private static bool IsSwitch(string key, uint index) =>
+        key is EqOn or NoiseOn or EchoOn or MicFlags || (key == VoiceMorph && index == 99) || Keys.Values.Any(k => k.On == key);
+
+    /// <summary>Reads the given settings into "key,index" = value (on/off as 1/0) so they can be put back later.</summary>
+    private Dictionary<string, float> Capture(IEnumerable<(string Key, uint Index)> settings)
+    {
+        var values = new Dictionary<string, float>();
+        if (!Available) return values;
+        foreach (var (key, index) in settings)
+        {
+            if (IsSwitch(key, index))
+            {
+                if (_store.GetBool(key, index) is bool on) values[$"{key},{index}"] = on ? 1 : 0;
+            }
+            else if (_store.GetFloat(key, index) is float v) values[$"{key},{index}"] = v;
+        }
+        return values;
+    }
+
+    private void WriteValues(Dictionary<string, float> values)
+    {
+        foreach (var (name, value) in values)
+        {
+            int comma = name.LastIndexOf(',');
+            if (comma < 0 || !uint.TryParse(name[(comma + 1)..], out uint index)) continue;
+            string key = name[..comma];
+            if (IsSwitch(key, index)) _store.Set(key, index, value != 0);
+            else _store.Set(key, index, value);
+        }
     }
 
     private void Neutral() => Change(() =>
@@ -126,17 +180,7 @@ public sealed class SoundBlaster : IDisposable
         if (!IsMicrophone) _store.Set(Preamp, 0, 0f);
     });
 
-    private void RestoreSwitches(Dictionary<string, float> saved) => Change(() =>
-    {
-        foreach (var (name, value) in saved)
-        {
-            int comma = name.LastIndexOf(',');
-            string key = name[..comma];
-            uint index = uint.Parse(name[(comma + 1)..]);
-            if (key == Preamp) _store.Set(key, index, value);
-            else _store.Set(key, index, value != 0);
-        }
-    });
+    private void RestoreSwitches(Dictionary<string, float> saved) => Change(() => WriteValues(saved));
 
     private sealed class OffState
     {
@@ -305,6 +349,75 @@ public sealed class SoundBlaster : IDisposable
         _store.Set(Keys[e].Level, 0, stored);
     }
 
+    // ---------------- remembered Sound Modes ----------------
+
+    /// <summary>Everything a Sound Mode changes or the user tunes on top of it: effects, levels, EQ and Volume Boost.</summary>
+    private static (string Key, uint Index)[] ProfileSettings
+    {
+        get
+        {
+            var list = new List<(string Key, uint Index)>();
+            foreach (var k in Keys.Values)
+            {
+                list.Add((k.On, 0));
+                list.Add((k.Level, 0));
+            }
+            list.Add((SmartVolumeMode, 0));
+            list.Add((Crossover, 0));
+            list.Add((Crossover, 2));
+            list.Add((EqOn, 0));
+            list.Add((Preamp, 0));
+            for (uint i = 0; i < 10; i++) list.Add((EqBands, i));
+            return list.ToArray();
+        }
+    }
+
+    private static string ProfileName(OutputKind kind, int mode) => $"{kind}/{Modes[mode].Name}";
+
+    private static int? RememberedMode(OutputKind kind) =>
+        Settings.Current.SoundMode.TryGetValue(kind.ToString(), out int m) && m >= 0 && m < Modes.Length ? m : null;
+
+    private void SaveProfile(OutputKind kind, int mode)
+    {
+        if (!Available || EngineOff()) return;
+        Settings.Current.SoundProfiles[ProfileName(kind, mode)] = Capture(ProfileSettings);
+        Settings.Save();
+    }
+
+    /// <summary>Puts a Sound Mode on: the user's own tuning of it when there is one, otherwise Creative's preset.</summary>
+    private void LoadMode(int mode)
+    {
+        if (Settings.Current.SoundProfiles.TryGetValue(ProfileName(Kind, mode), out var saved) && saved.Count > 0)
+            Change(() => WriteValues(saved));
+        else
+            ApplyMode(Modes[mode]);
+        Settings.Current.SoundMode[Kind.ToString()] = mode;
+        Settings.Save();
+    }
+
+    /// <summary>
+    /// Switches Sound Mode. The mode being left keeps any changes made to it (Volume Boost, effect levels, EQ…), and
+    /// the new one comes back exactly as it was last used.
+    /// </summary>
+    public void SwitchMode(int mode)
+    {
+        if (!Available || mode < 0 || mode >= Modes.Length) return;
+        int from = ActiveMode;
+        if (from >= 0) SaveProfile(Kind, from);
+        LoadMode(mode);
+    }
+
+    /// <summary>The Sound Mode in use, including any changes made to it; -1 when none was picked.</summary>
+    public int ActiveMode => RememberedMode(Kind) ?? CurrentMode();
+
+    /// <summary>Forgets every remembered Sound Mode tuning (used by Reset All).</summary>
+    public static void ForgetModes()
+    {
+        Settings.Current.SoundProfiles.Clear();
+        Settings.Current.SoundMode.Clear();
+        Settings.Save();
+    }
+
     /// <summary>Index of the Sound Mode the current settings match exactly, or -1.</summary>
     public int CurrentMode()
     {
@@ -387,12 +500,15 @@ public sealed class SoundBlaster : IDisposable
             ApplyMicEq(SoundPresets.MicEqualizer[0]);
             return;
         }
+        ForgetModes();
         Change(() =>
         {
             _store.Set(Preamp, 0, 0f);
             _store.Set(SmartVolumeMode, 0, 0f);
         });
         ApplyMode(Modes[0]);
+        Settings.Current.SoundMode[Kind.ToString()] = 0;
+        Settings.Save();
     }
 
     private void Change(Action write)

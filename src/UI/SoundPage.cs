@@ -185,7 +185,7 @@ public sealed class SoundPage : Panel
             }
             _svmModes.Select(Array.IndexOf(SvmOrder, _out.SmartMode));
             _svmModes.Enabled = _rows[Effect.SmartVolume].On.On;
-            int mode = _out.CurrentMode();
+            int mode = _out.ActiveMode;
             _modes.Select(mode);
             if (mode >= 0) _eqPreferred = SoundPresets.Modes[mode].Speaker.EqPresetId;
 
@@ -408,7 +408,8 @@ public sealed class SoundPage : Panel
         if (MessageBox.Show(this,
                 "Put all Sound settings back to Creative's factory defaults?\n\n" +
                 "Listening On goes back to Built-In Speakers, the Sound Mode to Gaming, Volume Boost to 100% " +
-                "and the Equalizer to its preset. All microphone effects are turned off.",
+                "and the Equalizer to its preset. Changes remembered for each Sound Mode are forgotten, and all " +
+                "microphone effects are turned off.",
                 "Reset All", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         Change(() =>
         {
@@ -490,7 +491,7 @@ public sealed class SoundPage : Panel
         _modes.ButtonClicked += i => Change(() =>
         {
             _eqPreferred = SoundPresets.Modes[i].Speaker.EqPresetId;
-            _out.ApplyMode(SoundPresets.Modes[i]);
+            _out.SwitchMode(i);
         });
         _playback.Controls.Add(_modes);
         y += 34 + 12;
