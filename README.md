@@ -101,6 +101,7 @@ On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appea
 - **Listening On**: Built-In Speakers, Headphones or Line Out (external speakers in the jack), chosen by hand like in Creative App. Headphones get the headphone version of each preset and headphone surround. Bluetooth, USB and HDMI audio don't go through Sound Blaster, so the panel says so instead of showing controls that do nothing
 - **Microphone volume** slider (Windows' own level)
 - Changes apply instantly, the same way Creative App saves them, so Creative App isn't needed
+- **Reset All** puts every Sound setting back to Creative's factory defaults (Built-In Speakers, Gaming, no boost, microphone effects off)
 
 ### ⌨️ Keybindings
 

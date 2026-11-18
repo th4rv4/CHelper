@@ -284,13 +284,13 @@ public sealed class SoundForm : Form
         });
         var reset = new TileButton
         {
-            Text = "Reset",
+            Text = "Reset All",
             Vertical = false,
             Font = _fBody,
-            Location = new Point(S(Pad + ContentWidth - 96), S(y)),
-            Size = new Size(S(96), S(32)),
+            Location = new Point(S(Pad + ContentWidth - 116), S(y)),
+            Size = new Size(S(116), S(32)),
         };
-        reset.Click += (_, _) => ResetTab();
+        reset.Click += (_, _) => ResetAll();
         Controls.Add(reset);
         y += 32 + 14;
 
@@ -304,15 +304,25 @@ public sealed class SoundForm : Form
         _micPanel.Visible = index == 1;
     }
 
-    private void ResetTab()
+    /// <summary>Puts every Sound setting back to Creative's factory defaults, in case something sounds wrong.</summary>
+    private void ResetAll()
     {
-        bool mic = _micPanel.Visible;
-        var target = mic ? _mic : _out;
-        if (target is not { Available: true }) return;
-        string what = mic ? "microphone effects" : $"{(_out.Headphones ? "headphone" : "speaker")} sound";
-        if (MessageBox.Show(this, $"Put the {what} back to Creative's defaults?", "Reset",
-                MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-        Change(target.Reset);
+        if (_out is not { Available: true } && _mic is not { Available: true }) return;
+        if (MessageBox.Show(this,
+                "Put all Sound settings back to Creative's factory defaults?\n\n" +
+                "Listening On goes back to Built-In Speakers, the Sound Mode to Gaming, Volume Boost to 100% " +
+                "and the Equalizer to its preset. All microphone effects are turned off.",
+                "Reset All", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        Change(() =>
+        {
+            if (_out.Available)
+            {
+                _out.SetKind(OutputKind.BuiltIn);
+                _out.Reset();
+            }
+            if (_mic.Available) _mic.Reset();
+            Log.Info("Sound settings reset to factory defaults");
+        });
     }
 
     private int BuildPlayback()
