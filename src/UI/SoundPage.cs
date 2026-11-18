@@ -136,8 +136,9 @@ public sealed class SoundPage : Panel
             if (!sb.IsMicrophone) sb.SetKind(OutputKind.BuiltIn);
             sb.Reset();
         }
-        Log.Info($"Sound panel: output '{_out.Device?.Name}' (Sound Blaster {(_out.Available ? "on" : "off")}), " +
-                 $"microphone '{_mic.Device?.Name}' (CrystalVoice {(_mic.Available ? "on" : "off")})");
+        Log.Info($"Sound panel: output '{_out.Device?.Name}' (Sound Blaster {(_out.Available ? "found" : "not found")}), " +
+                 $"microphone '{_mic.Device?.Name}' (CrystalVoice {(_mic.Available ? "found" : "not found")})" +
+                 (SoundBlaster.EngineOff() ? ", switched off" : ""));
         RefreshValues();
     }
 
@@ -294,14 +295,14 @@ public sealed class SoundPage : Panel
             Font = _fSmall,
         };
         Controls.Add(masterLabel);
-        new ToolTip().SetToolTip(_master, "Turns Creative's sound engine on or off for every speaker, headphone and microphone");
+        new ToolTip().SetToolTip(_master, "Turns every Sound Blaster effect off for speakers, headphones and the microphone, or back on");
         y += 34 + 16;
 
         _offNote = new Label
         {
             Text = "Sound Blaster Is Off\n\n" +
-                   "Speakers, headphones and the microphone play and record without any effects. " +
-                   "Windows doesn't load Creative's sound engine at all until you turn it back on.\n\n" +
+                   "Speakers, headphones and the microphone play and record without any effects: Surround, " +
+                   "Crystalizer, Bass, Smart Volume, Dialog+, Volume Boost, the Equalizer and CrystalVoice are all off.\n\n" +
                    "Your settings are kept for when you switch it back on.",
             Location = new Point(S(Pad), S(y)),
             Size = new Size(S(ContentWidth), S(150)),
@@ -391,13 +392,11 @@ public sealed class SoundPage : Panel
         _micPanel.Visible = index == 1;
     }
 
-    /// <summary>Master switch: Windows' audio enhancements on or off for every device with Creative's engine.</summary>
+    /// <summary>Master switch: every Sound Blaster effect off (settings kept) or back on.</summary>
     private void SetEngine(bool on)
     {
-        int failed = SoundBlaster.SetEngine(on);
-        if (failed > 0)
-            MessageBox.Show(this,
-                "Windows didn't allow C-Helper to change this for every device. The log has the details.",
+        if (!SoundBlaster.SetEngine(on))
+            MessageBox.Show(this, "C-Helper couldn't switch Sound Blaster. The log has the details.",
                 "Sound Blaster", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         OpenDevices();
     }

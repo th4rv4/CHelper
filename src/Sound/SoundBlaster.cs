@@ -95,26 +95,102 @@ public sealed class SoundBlaster : IDisposable
 
     public void Dispose() => _store?.Dispose();
 
-    /// <summary>The master switch is off: Windows' audio enhancements are off on the current output.</summary>
-    public static bool EngineOff()
+    // ---------------- master switch ----------------
+
+    // On this laptop the sound is processed inside the audio driver; Creative's engine only hands it the settings.
+    // Turning Windows' audio enhancements off just stops that hand-off and the driver keeps the last settings, so
+    // the switch instead sets every effect to neutral (keeping a copy) and puts them back when switched on.
+    private static string OffFile => Path.Combine(CreativeApp.TuningFolder, "sound-blaster-off.json");
+
+    /// <summary>The master switch is off: every effect is neutral and the user's settings are saved for later.</summary>
+    public static bool EngineOff() => File.Exists(OffFile);
+
+    /// <summary>The on/off switches (and Volume Boost) that make up "no effects"; levels and presets stay as they are.</summary>
+    private (string Key, uint Index)[] Switches => IsMicrophone
+        ? new[] { (NoiseOn, 0u), (EchoOn, 0u), (Keys[Effect.SmartVolume].On, 0u), (MicFlags, 0u), (VoiceMorph, 99u), (EqOn, 0u) }
+        : Keys.Values.Select(k => (k.On, 0u)).Append((EqOn, 0u)).ToArray();
+
+    private Dictionary<string, float> SaveSwitches()
     {
-        var ep = AudioEffects.Default(AudioEffects.Flow.Render);
-        return ep != null && AudioEffects.HasEffect(ep, EngineClsid) && AudioEffects.EnhancementsOff(ep) == true;
+        var saved = new Dictionary<string, float>();
+        if (!Available) return saved;
+        foreach (var (key, index) in Switches)
+            if (_store.GetBool(key, index) is bool on) saved[$"{key},{index}"] = on ? 1 : 0;
+        if (!IsMicrophone && _store.GetFloat(Preamp, 0) is float db) saved[$"{Preamp},0"] = db;
+        return saved;
+    }
+
+    private void Neutral() => Change(() =>
+    {
+        foreach (var (key, index) in Switches) _store.Set(key, index, false);
+        if (!IsMicrophone) _store.Set(Preamp, 0, 0f);
+    });
+
+    private void RestoreSwitches(Dictionary<string, float> saved) => Change(() =>
+    {
+        foreach (var (name, value) in saved)
+        {
+            int comma = name.LastIndexOf(',');
+            string key = name[..comma];
+            uint index = uint.Parse(name[(comma + 1)..]);
+            if (key == Preamp) _store.Set(key, index, value);
+            else _store.Set(key, index, value != 0);
+        }
+    });
+
+    private sealed class OffState
+    {
+        public Dictionary<string, float> Output { get; set; } = new();
+        public Dictionary<string, float> Microphone { get; set; } = new();
     }
 
     /// <summary>
-    /// Master switch: turns Windows' audio enhancements on or off for every speaker, headphone and microphone that
-    /// has Creative's engine, so with it off the engine isn't loaded at all. Settings are kept. Returns how many
-    /// devices Windows refused.
+    /// Master switch. Off saves the current effect switches and Volume Boost, then turns every effect off so speakers,
+    /// headphones and the microphone play and record plain; on puts the saved settings back. Returns false on failure.
     /// </summary>
-    public static int SetEngine(bool on)
+    public static bool SetEngine(bool on)
     {
-        int failed = 0;
+        try
+        {
+            KeepEnhancementsOn();
+            using var output = Output();
+            using var mic = Microphone();
+            if (!on)
+            {
+                if (EngineOff()) return true;
+                var state = new OffState { Output = output.SaveSwitches(), Microphone = mic.SaveSwitches() };
+                Directory.CreateDirectory(Path.GetDirectoryName(OffFile)!);
+                File.WriteAllText(OffFile, System.Text.Json.JsonSerializer.Serialize(state));
+                output.Neutral();
+                mic.Neutral();
+            }
+            else
+            {
+                if (!EngineOff()) return true;
+                var state = System.Text.Json.JsonSerializer.Deserialize<OffState>(File.ReadAllText(OffFile)) ?? new OffState();
+                output.RestoreSwitches(state.Output);
+                mic.RestoreSwitches(state.Microphone);
+                File.Delete(OffFile);
+            }
+            Log.Info($"Sound Blaster turned {(on ? "on" : "off")}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Switching Sound Blaster failed", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Creative's engine has to stay loaded to hand the settings to the driver. An earlier version of the switch
+    /// turned Windows' audio enhancements off; turn them back on wherever that happened.
+    /// </summary>
+    private static void KeepEnhancementsOn()
+    {
         foreach (var flow in new[] { AudioEffects.Flow.Render, AudioEffects.Flow.Capture })
             foreach (var ep in AudioEffects.EndpointsWith(flow, EngineClsid))
-                if (!AudioEffects.SetEnhancementsOff(ep, !on)) failed++;
-        Log.Info($"Sound Blaster engine turned {(on ? "on" : "off")}{(failed > 0 ? $", {failed} devices refused" : "")}");
-        return failed;
+                if (AudioEffects.EnhancementsOff(ep) == true) AudioEffects.SetEnhancementsOff(ep, false);
     }
 
     /// <summary>
