@@ -616,15 +616,20 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>Shows the Sound button when Creative's sound engine (Sound Blaster Studio) is on this laptop.</summary>
+    /// <summary>
+    /// Shows the Sound button when Creative's sound engine (Sound Blaster Studio) is on this laptop, or when it's
+    /// missing but the bundled drivers can set it up (the Sound page then offers to).
+    /// </summary>
     private async Task CheckSoundAsync()
     {
         try
         {
-            bool found = await Task.Run(() => Sound.SoundBlaster.Installed());
+            bool setup = false;
+            bool found = await Task.Run(() => Sound.SoundBlaster.Installed() || (setup = Sound.SoundSetup.Needed()));
             if (IsDisposed || found == _soundFound) return;
             _soundFound = found;
-            Log.Info(found ? "Sound Blaster Studio found" : "Sound Blaster Studio not found");
+            Log.Info(setup ? "Sound Blaster needs setting up (its audio driver is missing)"
+                : found ? "Sound Blaster Studio found" : "Sound Blaster Studio not found");
             if (_soundBtn is not { IsDisposed: false }) return;
             _soundBtn.Visible = found;
             // Log moves right to make room for the Sound button.

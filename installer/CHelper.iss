@@ -5,6 +5,8 @@
 ; Vendor files (see vendor/README.md) are bundled when present:
 ;   vendor\InsydeDCHU.dll      copied next to CHelper.exe
 ;   vendor\driver\*            Clevo ACPI bridge driver, installed with pnputil if included
+;   vendor\sound\*             Sound Blaster Studio drivers (Creative Realtek extension, Creative's engine and
+;                              speaker tuning), set up by Setup-SoundBlaster.ps1 on the EVOL P15's audio chip
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -56,6 +58,8 @@ Source: "{#Root}\out\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\vendor\InsydeDCHU.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#Root}\vendor\driver\*"; DestDir: "{app}\driver"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "{#Root}\vendor\sound\*"; DestDir: "{app}\sound"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "{#Root}\installer\Setup-SoundBlaster.ps1"; DestDir: "{app}\sound"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -172,4 +176,30 @@ begin
        '-NoProfile -Command "if ((Get-PnpDevice -InstanceId ''ACPI\CLV0001*'' -ErrorAction SilentlyContinue | Where-Object Status -eq ''OK'')) { exit 0 } else { exit 1 }"',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Result := ResultCode <> 0;
+end;
+
+// ---------- Sound Blaster Studio ----------
+var
+  SoundRestart: Boolean;
+
+// After the files are in place: set up Sound Blaster when it's missing (fresh Windows, or Windows Update replaced
+// its driver). The script does nothing on other laptops or when everything is already set up. Skipped on in-app
+// updates; the Sound page offers the same setup if it's ever needed.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if (CurStep <> ssPostInstall) or IsUpdate() then Exit;
+  if not FileExists(ExpandConstant('{app}\sound\Setup-SoundBlaster.ps1')) then Exit;
+  WizardForm.StatusLabel.Caption := 'Setting up Sound Blaster...';
+  if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       ExpandConstant('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{app}\sound\Setup-SoundBlaster.ps1" -Source "{app}\sound"'),
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    SoundRestart := ResultCode = 0;
+end;
+
+// Sound Blaster was just set up: Windows needs a restart to load it.
+function NeedRestart(): Boolean;
+begin
+  Result := SoundRestart;
 end;

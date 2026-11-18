@@ -105,6 +105,10 @@ On laptops with Creative's Sound Blaster Studio engine, a **Sound** button appea
 - **Sound Blaster** master switch: turns every effect off (Surround, Crystalizer, Bass, Smart Volume, Dialog+, Volume Boost, the Equalizer and CrystalVoice) so speakers, headphones and the microphone play and record plain. Switching it back on puts your settings back exactly as they were
 - **Reset All** puts every Sound setting back to Creative's factory defaults (Built-In Speakers, Gaming, no boost, microphone effects off)
 - **Remove Creative App**: shown in the Sound panel while Creative App is installed. Uninstalls it with its background services and the Dolby Digital Live / DTS Connect packs, and moves its leftover files to the Recycle Bin. The sound drivers, Creative's sound engine and Speaker EQ Clevo stay, and the speaker tuning files Creative App kept in its own folder are copied to `C:\ProgramData\CHelper\Sound` first, so the sound doesn't change
+- **Sound Blaster drivers included**: the installer brings everything Sound Blaster needs, so there's nothing to download from the vendor site after a fresh Windows install. On the EVOL P15's audio chip it makes a restore point, backs up the current audio extension driver, adds the Creative version of the Realtek audio extension and installs Creative's sound engine and Speaker EQ Clevo, then asks for a restart. If Windows Update later swaps the driver and Sound Blaster stops working, the Sound page shows **Set Up Sound Blaster** to put it back. No other driver is touched
+
+> [!NOTE]
+> The bundled sound drivers (Realtek, Creative, Clevo) belong to their respective owners, not to the developer of C-Helper. They are included only so the laptop's own hardware keeps working, and C-Helper is completely non-profit.
 
 ### ⌨️ Keybindings
 

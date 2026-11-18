@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CHelper.Sound;
 using static CHelper.Sound.SoundBlaster;
 
@@ -32,7 +33,7 @@ public sealed class SoundPage : Panel
 
     private Font _fHead, _fBody, _fSmall;
     private Label _status, _footerNote;
-    private TileButton _removeCreative;
+    private TileButton _removeCreative, _setup;
     private SegRow _tabs;
     private Panel _playback, _micPanel;
     private Label _outMissing, _micMissing;
@@ -170,6 +171,9 @@ public sealed class SoundPage : Panel
 
         _status.Text = _out.Device?.Name ?? "No output";
         SetAvailable(_playback, _outMissing, _out.Available);
+        bool setupNeeded = !_out.Available && SoundSetup.Needed();
+        _outMissing.Text = setupNeeded ? NotSetUp : NotOnOutput;
+        _setup.Visible = setupNeeded;
         if (_out.Available)
         {
             _kinds.Select(Array.IndexOf(KindOrder, _out.Kind));
@@ -590,11 +594,74 @@ public sealed class SoundPage : Panel
         _playback.Controls.Add(_eq);
         y += 124;
 
-        _outMissing = Missing(_playback, 30,
-            "Sound Blaster isn't available on this output.\n\n" +
-            "It works on the laptop's speakers and on headphones in the laptop's jack. " +
-            "Bluetooth, USB and HDMI audio don't go through it.");
+        _outMissing = Missing(_playback, 30, NotOnOutput);
+
+        // Shown with the message above when Sound Blaster's driver is missing (e.g. replaced by Windows Update).
+        _setup = new TileButton
+        {
+            Text = "Set Up Sound Blaster",
+            Vertical = false,
+            Font = _fBody,
+            Accent = Theme.Eco,
+            Location = new Point(0, S(30 + 120)),
+            Size = new Size(S(200), S(34)),
+            Tag = Always,
+            Visible = false,
+        };
+        _setup.Click += (_, _) => _ = SetUpAsync();
+        _playback.Controls.Add(_setup);
         return y;
+    }
+
+    private const string NotOnOutput =
+        "Sound Blaster isn't available on this output.\n\n" +
+        "It works on the laptop's speakers and on headphones in the laptop's jack. " +
+        "Bluetooth, USB and HDMI audio don't go through it.";
+
+    private const string NotSetUp =
+        "Sound Blaster isn't set up on this laptop.\n\n" +
+        "Windows may have replaced the audio driver it needs. C-Helper can set it up again with the drivers it " +
+        "came with. It takes about a minute, and a restart finishes it.";
+
+    /// <summary>Installs the bundled Sound Blaster drivers, then offers the restart that finishes the job.</summary>
+    private async Task SetUpAsync()
+    {
+        if (MessageBox.Show(this,
+                "Set up Sound Blaster with the drivers that came with C-Helper?\n\n" +
+                "A restore point is made and the current audio driver is backed up first. Only the laptop's own " +
+                "Realtek audio extension and Creative's sound engine are changed. Restart the laptop afterwards.",
+                "Set Up Sound Blaster", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+
+        _setup.Enabled = false;
+        bool noteShown = _footerNote.Visible;
+        _footerNote.Visible = true;
+        _footerNote.ForeColor = Theme.Warn;
+        _footerNote.Text = "Setting up Sound Blaster, this takes about a minute…";
+        int code = await Task.Run(() => SoundSetup.Run());
+        if (IsDisposed) return;
+        _setup.Enabled = true;
+        _footerNote.Visible = noteShown;
+        _footerNote.ForeColor = Theme.Muted;
+        _footerNote.Text = "Changes apply right away";
+
+        if (code == 0)
+        {
+            if (MessageBox.Show(this, "Sound Blaster is set up. Restart the laptop now to finish?",
+                    "Set Up Sound Blaster", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { CreateNoWindow = true, UseShellExecute = false });
+        }
+        else if (code == 3)
+        {
+            MessageBox.Show(this, "The Sound Blaster drivers are already in place. If it still doesn't show up, restart the laptop.",
+                "Set Up Sound Blaster", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        else
+        {
+            MessageBox.Show(this, "Setting up Sound Blaster didn't finish. The details are in " +
+                    @"C:\ProgramData\CHelper\Sound\setup-log.txt and in C-Helper's log.",
+                "Set Up Sound Blaster", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        OpenDevices();
     }
 
     private int BuildMicrophone()
