@@ -12,3 +12,13 @@ internal static class InputLanguageGuard
 
     public static bool IsLayoutMessage(int msg) => msg is WM_INPUTLANGCHANGEREQUEST or WM_INPUTLANGCHANGE;
 }
+
+/// <summary>Context menu that hands keyboard-layout messages straight to Windows (see InputLanguageGuard).</summary>
+public class SafeContextMenu : ContextMenuStrip
+{
+    protected override void WndProc(ref Message m)
+    {
+        if (InputLanguageGuard.IsLayoutMessage(m.Msg)) { DefWndProc(ref m); return; }
+        base.WndProc(ref m);
+    }
+}

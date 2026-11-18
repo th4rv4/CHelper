@@ -104,7 +104,7 @@ public sealed class TrayContext : ApplicationContext
 
     private ContextMenuStrip BuildMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = new SafeContextMenu();
         var modes = new (string Text, PowerMode Mode)[]
         {
             ("Quiet", PowerMode.Quiet),

@@ -48,6 +48,13 @@ public sealed class OsdForm : Form
 
     protected override bool ShowWithoutActivation => true;
 
+    protected override void WndProc(ref Message m)
+    {
+        // Keyboard-layout changes go straight to Windows (see InputLanguageGuard).
+        if (InputLanguageGuard.IsLayoutMessage(m.Msg)) { DefWndProc(ref m); return; }
+        base.WndProc(ref m);
+    }
+
     protected override CreateParams CreateParams
     {
         get
