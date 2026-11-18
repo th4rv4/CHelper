@@ -66,6 +66,7 @@ public static class AudioEffects
     }
 
     private static readonly PropKey DisableSysFx = new("1da5d803-d492-4edd-8c23-e0c0ffee7f0e", 5);
+    private const string DisableSysFxName = "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5";
 
     /// <summary>
     /// Windows' "Audio enhancements" switch for the device. When off, Windows doesn't load the device's sound
@@ -73,69 +74,66 @@ public static class AudioEffects
     /// </summary>
     public static bool? EnhancementsOff(Endpoint ep)
     {
+        if (ep == null) return null;
         bool? result = null;
-        WithDevice(ep, dev =>
+        WithPolicy(policy =>
         {
-            if (dev.OpenPropertyStore(StgmRead, out var props) != 0 || props == null) return;
-            try
+            var k = DisableSysFx;
+            if (policy.GetPropertyValue(ep.Id, 1, ref k, out var v) == 0)
             {
-                var k = DisableSysFx;
-                if (props.GetValue(ref k, out var v) == 0)
-                {
-                    result = v.vt != VtEmpty && v.intVal != 0;
-                    PropVariantClear(ref v);
-                }
+                result = v.vt != VtEmpty && v.intVal != 0;
+                PropVariantClear(ref v);
             }
-            finally { Marshal.ReleaseComObject(props); }
         });
-        return result;
+        if (result != null) return result;
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey($@"{MmDevices}\{ep.Flow}\{ep.Guid}\FxProperties");
+            return key?.GetValue(DisableSysFxName) is int off && off != 0;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
-    /// <summary>Turns Windows' audio enhancements for the device off (true) or on. Returns false if Windows refused.</summary>
+    /// <summary>
+    /// Turns Windows' audio enhancements for the device off (true) or on, the same way the switch in Windows' Sound
+    /// settings does, so the sound path is rebuilt right away. Returns false if Windows refused.
+    /// </summary>
     public static bool SetEnhancementsOff(Endpoint ep, bool off)
     {
+        if (ep == null) return false;
         bool ok = false;
-        WithDevice(ep, dev =>
+        WithPolicy(policy =>
         {
-            int hr = dev.OpenPropertyStore(StgmReadWrite, out var props);
-            if (hr != 0 || props == null)
-            {
-                Log.Info($"Audio enhancements: can't open '{ep.Name}' for writing (0x{hr:X8})");
-                return;
-            }
-            try
-            {
-                var k = DisableSysFx;
-                var v = new PropVariant { vt = VtUi4, intVal = off ? 1 : 0 };
-                hr = props.SetValue(ref k, ref v);
-                if (hr == 0) hr = props.Commit();
-                ok = hr == 0;
-                Log.Info($"Audio enhancements {(off ? "off" : "on")} for '{ep.Name}': 0x{hr:X8}");
-            }
-            finally { Marshal.ReleaseComObject(props); }
+            var k = DisableSysFx;
+            var v = new PropVariant { vt = VtUi4, intVal = off ? 1 : 0 };
+            int hr = policy.SetPropertyValue(ep.Id, 1, ref k, ref v);
+            // Older Windows versions keep the switch with the device's other settings; set it there as well.
+            v = new PropVariant { vt = VtUi4, intVal = off ? 1 : 0 };
+            int hr2 = policy.SetPropertyValue(ep.Id, 0, ref k, ref v);
+            ok = hr == 0 && EnhancementsOff(ep) == off;
+            Log.Info($"Audio enhancements {(off ? "off" : "on")} for '{ep.Name}': 0x{hr:X8}/0x{hr2:X8}{(ok ? "" : ", not applied")}");
         });
         return ok;
     }
 
-    private static void WithDevice(Endpoint ep, Action<IMMDevice> use)
+    private static void WithPolicy(Action<IPolicyConfig> use)
     {
-        if (ep == null) return;
-        IMMDeviceEnumerator en = null;
-        IMMDevice dev = null;
+        IPolicyConfig policy = null;
         try
         {
-            en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            if (en.GetDevice(ep.Id, out dev) != 0 || dev == null) return;
-            use(dev);
+            policy = (IPolicyConfig)new PolicyConfigClient();
+            use(policy);
         }
         catch (Exception ex)
         {
-            Log.Error("Audio device access failed", ex);
+            Log.Error("Audio settings access failed", ex);
         }
         finally
         {
-            if (dev != null) Marshal.ReleaseComObject(dev);
-            if (en != null) Marshal.ReleaseComObject(en);
+            if (policy != null) Marshal.ReleaseComObject(policy);
         }
     }
 
@@ -468,6 +466,27 @@ public static class AudioEffects
         [PreserveSig] int GetValue(ref PropKey key, out PropVariant value);
         [PreserveSig] int SetValue(ref PropKey key, ref PropVariant value);
         [PreserveSig] int Commit();
+    }
+
+    [ComImport, Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
+    private class PolicyConfigClient { }
+
+    /// <summary>The interface Windows' own Sound settings use to change a device's settings.</summary>
+    [ComImport, Guid("F8679F50-850A-41CF-9C72-430F290290C8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPolicyConfig
+    {
+        [PreserveSig] int GetMixFormat([MarshalAs(UnmanagedType.LPWStr)] string id, out IntPtr format);
+        [PreserveSig] int GetDeviceFormat([MarshalAs(UnmanagedType.LPWStr)] string id, int defaultFormat, out IntPtr format);
+        [PreserveSig] int ResetDeviceFormat([MarshalAs(UnmanagedType.LPWStr)] string id);
+        [PreserveSig] int SetDeviceFormat([MarshalAs(UnmanagedType.LPWStr)] string id, IntPtr endpointFormat, IntPtr mixFormat);
+        [PreserveSig] int GetProcessingPeriod([MarshalAs(UnmanagedType.LPWStr)] string id, int defaultPeriod, out long period, out long minPeriod);
+        [PreserveSig] int SetProcessingPeriod([MarshalAs(UnmanagedType.LPWStr)] string id, IntPtr period);
+        [PreserveSig] int GetShareMode([MarshalAs(UnmanagedType.LPWStr)] string id, IntPtr mode);
+        [PreserveSig] int SetShareMode([MarshalAs(UnmanagedType.LPWStr)] string id, IntPtr mode);
+        [PreserveSig] int GetPropertyValue([MarshalAs(UnmanagedType.LPWStr)] string id, int fxStore, ref PropKey key, out PropVariant value);
+        [PreserveSig] int SetPropertyValue([MarshalAs(UnmanagedType.LPWStr)] string id, int fxStore, ref PropKey key, ref PropVariant value);
+        [PreserveSig] int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string id, int role);
+        [PreserveSig] int SetEndpointVisibility([MarshalAs(UnmanagedType.LPWStr)] string id, int visible);
     }
 
     [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
