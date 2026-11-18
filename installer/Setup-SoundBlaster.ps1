@@ -41,11 +41,11 @@ try {
     $drivers = Get-WindowsDriver -Online
     $creativeExt = @($drivers | Where-Object { $_.OriginalFileName -match '\\hdx_clevoext_ct\.inf$' })
     $plainExt = @($drivers | Where-Object { $_.OriginalFileName -match '\\hdx_clevoext_rtk\.inf$' })
-    $apps = @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-                               'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.DisplayName })
-    $hasEq = @($apps -match 'Speaker EQ').Count -gt 0
-    $hasEffects = @($apps -match 'Creative Audio Effects').Count -gt 0
+    # Neither Creative installer registers in the installed-programs list, so look for what each one leaves behind:
+    # Speaker EQ Clevo puts the speaker tuning in Windows, and the Audio Effects Component adds Creative's engine drivers.
+    $hasEq = Test-Path (Join-Path $env:SystemRoot 'MBSpkrEQ.cfg')
+    $hasEffects = @($drivers | Where-Object { $_.OriginalFileName -match '\\creativeextensionclevo\.inf' }).Count -gt 0 -and
+                  @($drivers | Where-Object { $_.OriginalFileName -match '\\creativecomponent\.inf' }).Count -gt 0
 
     $needed = $creativeExt.Count -eq 0 -or $plainExt.Count -gt 0 -or -not $hasEq -or -not $hasEffects
     Say ("Creative extension: $($creativeExt.Count -gt 0), plain extension: $($plainExt.Count -gt 0), " +
