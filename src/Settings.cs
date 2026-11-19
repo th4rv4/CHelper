@@ -60,6 +60,9 @@ public sealed class AppSettings
 
     /// <summary>Device ID of the Wi-Fi card, so it can still be found after its driver is gone.</summary>
     public string WifiDeviceId { get; set; }
+
+    /// <summary>AdGuard DNS on every real network adapter (see AdGuardDns).</summary>
+    public bool AdGuardDns { get; set; }
 }
 
 public static class Settings

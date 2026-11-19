@@ -29,10 +29,18 @@ public sealed class MainForm : Form
     private TileButton _fullCharge;
     private TileButton _stockBtn;
     private bool _stockFound; // kept here so the button survives the window being rebuilt
-    private const int StockW = 150, WifiW = 150;
+    private const int StockW = 150;
     private Label _optionsHint;
 
-    // Wi-Fi Driver Refresh in the Options title row; red while the Wi-Fi card is stopped or missing (see WifiDriver).
+    // Network row: Wi-Fi Driver Refresh and AdGuard DNS; the hint shows Wi-Fi trouble first, otherwise the DNS state.
+    private Label _netHint;
+    private TileButton _dnsBtn;
+    private (int Adapters, int On) _dns;
+    private bool _dnsBusy;
+    // Network changes (an adapter coming back after a refresh, a new Ethernet / tethering): put AdGuard DNS on it.
+    private readonly System.Windows.Forms.Timer _dnsApply = new() { Interval = 5000 };
+
+    // Wi-Fi Driver Refresh in the Network row; red while the Wi-Fi card is stopped or missing (see WifiDriver).
     private const string WifiLabel = "Wi-Fi Driver Refresh";
     private TileButton _wifiBtn;
     private WifiStatus _wifi;
@@ -150,10 +158,18 @@ public sealed class MainForm : Form
         };
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+        _dnsApply.Tick += (_, _) =>
+        {
+            _dnsApply.Stop();
+            _ = ApplyDnsAsync();
+        };
+        _dnsApply.Start(); // first look shortly after start-up
         Disposed += (_, _) =>
         {
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+            NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
         };
     }
 
@@ -343,7 +359,7 @@ public sealed class MainForm : Form
 
         _optionsHint = Section("settings", "Options");
         _optionsHint.Left = S(Pad + 110);
-        // Wi-Fi Driver Refresh and Remove Stock App at the right end of the title row (LayoutOptionsTitle places them).
+        // Remove Stock App at the right end of the title row; only shown while the stock software is still there.
         _stockBtn = new TileButton
         {
             Text = "Remove Stock App",
@@ -357,27 +373,49 @@ public sealed class MainForm : Form
         _stockBtn.Click += (_, _) => OpenStockSoftware();
         _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
         Controls.Add(_stockBtn);
-        _wifiBtn = new TileButton
-        {
-            Text = WifiLabel,
-            Vertical = false,
-            Font = _fSmall,
-            Accent = Theme.Turbo,
-            Location = new Point(S(Pad + ContentWidth - WifiW), S(_y - 28 - 3)),
-            Size = new Size(S(WifiW), S(26)),
-            Visible = false,
-        };
-        _wifiBtn.Click += (_, _) =>
-        {
-            if (_wifiUi.Enabled) _ = FixWifiAsync();
-        };
-        _tips.SetToolTip(_wifiBtn,
-            "Removes every Intel Wi-Fi driver on the laptop and reinstalls the last one that worked. Use it when Wi-Fi stops or disappears.");
-        Controls.Add(_wifiBtn);
-        ApplyWifiUi();
+        LayoutOptionsTitle();
         _options = Row(46, false, 18,
             new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"));
         _options.ButtonClicked += OnOptionClicked;
+
+        _netHint = Section("network", "Network");
+        int half = (ContentWidth - 6) / 2;
+        _wifiBtn = new TileButton
+        {
+            Text = WifiLabel,
+            IconName = "wifi",
+            IconSize = 18,
+            Vertical = false,
+            Font = _fBody,
+            Accent = Theme.Turbo,
+            Location = new Point(S(Pad), S(_y)),
+            Size = new Size(S(half), S(40)),
+        };
+        _wifiBtn.Click += (_, _) =>
+        {
+            if (_wifiUi.Visible && _wifiUi.Enabled) _ = FixWifiAsync();
+        };
+        _tips.SetToolTip(_wifiBtn,
+            "Removes every Intel Wi-Fi driver on the laptop and reinstalls the last one that worked, then adds your saved Wi-Fi networks back. Use it when Wi-Fi stops or disappears.");
+        Controls.Add(_wifiBtn);
+        _dnsBtn = new TileButton
+        {
+            Text = "AdGuard DNS",
+            IconName = "shield",
+            IconSize = 18,
+            Vertical = false,
+            Font = _fBody,
+            Accent = Theme.Standard,
+            Location = new Point(S(Pad + half + 6), S(_y)),
+            Size = new Size(S(ContentWidth - half - 6), S(40)),
+        };
+        _dnsBtn.Click += (_, _) => _ = ToggleDnsAsync();
+        _tips.SetToolTip(_dnsBtn,
+            "Blocks ads and trackers for the whole laptop with AdGuard's DNS (with DNS over HTTPS), on Wi-Fi, Ethernet and tethering. Comes back by itself after a Wi-Fi Driver Refresh.");
+        Controls.Add(_dnsBtn);
+        _y += 40 + 12;
+        ApplyWifiUi();
+        ApplyDnsUi();
 
         _chargeHint = Section("battery-saver", "Battery Charge Limit");
         // Full Charge Once at the right end of the title row; the hint moves to its left.
@@ -674,16 +712,11 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>Right end of the Options title row: Wi-Fi Driver Refresh, then Remove Stock App, then the hint in the space left.</summary>
+    /// <summary>Right end of the Options title row: Remove Stock App, then the hint in the space left.</summary>
     private void LayoutOptionsTitle()
     {
         if (_optionsHint is not { IsDisposed: false }) return;
         int right = Pad + ContentWidth;
-        if (_wifiUi.Visible)
-        {
-            _wifiBtn.Left = S(right - WifiW);
-            right -= WifiW + 10;
-        }
         if (_stockFound)
         {
             _stockBtn.Left = S(right - StockW);
@@ -796,6 +829,8 @@ public sealed class MainForm : Form
                 _wifiNotified = false;
                 ShowWifi(true, "Done", Theme.Accent, true, true, -1, "Wi-Fi Working Again", Theme.Accent);
                 _wifiDone.Start();
+                _dnsApply.Stop();
+                _dnsApply.Start(); // the reinstalled adapter starts with automatic DNS
                 _ = Task.Run(() => WifiDriver.SaveWorkingDriver(after));
             }
             else
@@ -835,18 +870,107 @@ public sealed class MainForm : Form
     {
         if (_wifiBtn is not { IsDisposed: false }) return;
         var u = _wifiUi;
-        _wifiBtn.Visible = u.Visible;
-        if (u.Visible)
+        // Stays in its place in the Network row; without an Intel Wi-Fi card it just can't be clicked.
+        _wifiBtn.Text = u.Visible ? u.Text : WifiLabel;
+        _wifiBtn.Accent = u.Accent == default ? Theme.Turbo : u.Accent;
+        _wifiBtn.Active = u.Visible && u.Active;
+        _wifiBtn.Enabled = u.Visible && u.Enabled;
+        _wifiBtn.Progress = u.Visible ? u.Progress : -1;
+        UpdateNetHint();
+    }
+
+    /// <summary>Network hint: Wi-Fi trouble or refresh progress first, otherwise whether AdGuard DNS is on.</summary>
+    private void UpdateNetHint()
+    {
+        if (_netHint is not { IsDisposed: false }) return;
+        var u = _wifiUi;
+        if (u.Visible && !string.IsNullOrEmpty(u.Hint))
         {
-            _wifiBtn.Text = u.Text;
-            _wifiBtn.Accent = u.Accent;
-            _wifiBtn.Active = u.Active;
-            _wifiBtn.Enabled = u.Enabled;
-            _wifiBtn.Progress = u.Progress;
+            _netHint.Text = u.Hint;
+            _netHint.ForeColor = u.HintColor == default ? Theme.Muted : u.HintColor;
+            return;
         }
-        _optionsHint.Text = u.Visible ? u.Hint ?? "" : "";
-        _optionsHint.ForeColor = u.HintColor == default ? Theme.Muted : u.HintColor;
-        LayoutOptionsTitle();
+        _netHint.ForeColor = Theme.Muted;
+        bool on = Settings.Current.AdGuardDns;
+        if (_dnsBusy) _netHint.Text = on ? "Turning On AdGuard DNS…" : "Turning Off AdGuard DNS…";
+        else if (!on) _netHint.Text = "";
+        else if (_dns.Adapters == 0) _netHint.Text = "AdGuard DNS On";
+        else if (_dns.On < _dns.Adapters) _netHint.Text = $"AdGuard DNS On · {_dns.On} Of {_dns.Adapters} Adapters";
+        else _netHint.Text = $"AdGuard DNS On · {_dns.Adapters} Adapter{(_dns.Adapters == 1 ? "" : "s")}";
+    }
+
+    // ---------------- AdGuard DNS ----------------
+
+    private void ApplyDnsUi()
+    {
+        if (_dnsBtn is not { IsDisposed: false }) return;
+        _dnsBtn.Active = Settings.Current.AdGuardDns;
+        _dnsBtn.Enabled = !_dnsBusy;
+        UpdateNetHint();
+    }
+
+    private async Task ToggleDnsAsync()
+    {
+        if (_dnsBusy) return;
+        bool on = !Settings.Current.AdGuardDns;
+        Settings.Current.AdGuardDns = on;
+        Settings.Save();
+        Log.Info($"AdGuard DNS {(on ? "on" : "off")}");
+        _dnsBusy = true;
+        ApplyDnsUi();
+        try
+        {
+            _dns = await Task.Run(() =>
+            {
+                if (on) AdGuardDns.Apply();
+                else AdGuardDns.Remove();
+                return AdGuardDns.Status();
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Changing AdGuard DNS failed", ex);
+        }
+        finally
+        {
+            _dnsBusy = false;
+        }
+        if (!IsDisposed) ApplyDnsUi();
+    }
+
+    /// <summary>While AdGuard DNS is on: puts it on any adapter that lost it or is new. Only reads when nothing to do.</summary>
+    private async Task ApplyDnsAsync()
+    {
+        if (_dnsBusy || !Settings.Current.AdGuardDns) return;
+        _dnsBusy = true;
+        try
+        {
+            _dns = await Task.Run(() =>
+            {
+                AdGuardDns.Apply();
+                return AdGuardDns.Status();
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Applying AdGuard DNS failed", ex);
+        }
+        finally
+        {
+            _dnsBusy = false;
+        }
+        if (!IsDisposed) ApplyDnsUi();
+    }
+
+    private void OnNetworkAddressChanged(object sender, EventArgs e)
+    {
+        if (!Settings.Current.AdGuardDns || !IsHandleCreated || IsDisposed) return;
+        // Changes come in bursts: act once things have been quiet for a few seconds.
+        BeginInvoke(new Action(() =>
+        {
+            _dnsApply.Stop();
+            _dnsApply.Start();
+        }));
     }
 
     /// <summary>
