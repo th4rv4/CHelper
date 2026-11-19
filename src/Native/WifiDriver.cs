@@ -4,7 +4,11 @@ using System.Text.RegularExpressions;
 
 namespace CHelper.Native;
 
-public enum WifiState { NotFound, Working, Disabled, Stopped }
+/// <summary>
+/// NotFound: no Intel Wi-Fi card has ever been seen. Missing: the card C-Helper saw before is gone from the device
+/// list (removed, or Windows dropped it). Stopped: listed, but with an error.
+/// </summary>
+public enum WifiState { NotFound, Working, Disabled, Stopped, Missing }
 
 /// <summary>The Intel Wi-Fi card as Windows sees it. <see cref="Problem"/> is the Device Manager error code (43 = stopped).</summary>
 public sealed record WifiStatus(WifiState State, string Name, string DeviceId, int Problem);
@@ -76,6 +80,8 @@ public static class WifiDriver
                 {
                     using (o) return ToStatus(o["Name"] as string ?? "Wi-Fi", o["PNPDeviceID"] as string, o["ConfigManagerErrorCode"]);
                 }
+                // Seen before but not in the device list at all any more.
+                return new WifiStatus(WifiState.Missing, "Wi-Fi", id, 0);
             }
         }
         catch (Exception ex)
@@ -156,14 +162,25 @@ public static class WifiDriver
     /// </summary>
     public static WifiStatus Repair(WifiStatus status, IProgress<(int Percent, string Step)> progress)
     {
-        Log.Info($"Fixing Wi-Fi: {status.Name} · Code {status.Problem}");
+        Log.Info(status.State == WifiState.Missing
+            ? $"Fixing Wi-Fi: card missing ({status.DeviceId})"
+            : $"Fixing Wi-Fi: {status.Name} · Code {status.Problem}");
         string saved = SavedVersion;
 
         if (saved == null)
         {
-            Log.Info("No saved Wi-Fi driver yet: restarting the card only");
-            progress.Report((30, "Restarting The Card…"));
-            if (!string.IsNullOrEmpty(status.DeviceId)) PnpUtil($"/restart-device \"{status.DeviceId}\"");
+            if (status.State == WifiState.Missing)
+            {
+                Log.Info("No saved Wi-Fi driver yet: looking for the card again only");
+                progress.Report((30, "Looking For The Card…"));
+                PnpUtil("/scan-devices");
+            }
+            else
+            {
+                Log.Info("No saved Wi-Fi driver yet: restarting the card only");
+                progress.Report((30, "Restarting The Card…"));
+                if (!string.IsNullOrEmpty(status.DeviceId)) PnpUtil($"/restart-device \"{status.DeviceId}\"");
+            }
             return WaitForWorking(progress, 60);
         }
 

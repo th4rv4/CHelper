@@ -139,7 +139,7 @@ public sealed class MainForm : Form
         _wifiDone.Tick += (_, _) =>
         {
             _wifiDone.Stop();
-            if (_wifi?.State != WifiState.Stopped) ShowWifi(false);
+            if (!WifiBroken(_wifi)) ShowWifi(false);
         };
         _wifiRecheck.Tick += (_, _) =>
         {
@@ -368,7 +368,7 @@ public sealed class MainForm : Form
         };
         _wifiBtn.Click += (_, _) =>
         {
-            if (_wifiUi.Enabled && _wifi is { State: not WifiState.Working }) _ = FixWifiAsync();
+            if (_wifiUi.Enabled && WifiBroken(_wifi)) _ = FixWifiAsync();
         };
         _tips.SetToolTip(_wifiBtn,
             "The Wi-Fi card has stopped. Fix Wi-Fi removes the old Intel Wi-Fi drivers and reinstalls the last one that worked.");
@@ -731,12 +731,15 @@ public sealed class MainForm : Form
                 return s;
             });
             if (IsDisposed) return;
-            bool wasStopped = _wifi?.State == WifiState.Stopped;
+            bool wasBroken = WifiBroken(_wifi);
             _wifi = status;
-            if (status.State == WifiState.Stopped)
+            if (WifiBroken(status))
             {
-                if (!wasStopped) Log.Info($"Wi-Fi stopped ({reason}): {status.Name} · Code {status.Problem}");
-                ShowWifi(true, "Fix Wi-Fi", Theme.Turbo, true, -1, $"Wi-Fi Stopped · Code {status.Problem}", Theme.Warn);
+                bool missing = status.State == WifiState.Missing;
+                if (!wasBroken)
+                    Log.Info(missing ? $"Wi-Fi card missing ({reason})" : $"Wi-Fi stopped ({reason}): {status.Name} · Code {status.Problem}");
+                ShowWifi(true, "Fix Wi-Fi", Theme.Turbo, true, -1,
+                    missing ? "Wi-Fi Card Missing" : $"Wi-Fi Stopped · Code {status.Problem}", Theme.Warn);
                 if (!_wifiNotified)
                 {
                     _wifiNotified = true;
@@ -759,9 +762,12 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>The card is listed with an error, or it was seen before and is gone.</summary>
+    private static bool WifiBroken(WifiStatus s) => s?.State is WifiState.Stopped or WifiState.Missing;
+
     private async Task FixWifiAsync()
     {
-        if (_wifiFixing || _wifi == null || _wifi.State == WifiState.Working) return;
+        if (_wifiFixing || !WifiBroken(_wifi)) return;
         _wifiFixing = true;
         _wifiDone.Stop();
         var start = _wifi;
