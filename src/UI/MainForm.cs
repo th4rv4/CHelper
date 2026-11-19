@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 using CHelper.Hardware;
 using CHelper.Native;
+using Microsoft.Win32;
 
 namespace CHelper.UI;
 
@@ -27,6 +29,22 @@ public sealed class MainForm : Form
     private TileButton _fullCharge;
     private TileButton _stockBtn;
     private bool _stockFound; // kept here so the button survives the window being rebuilt
+    private const int StockW = 150, WifiW = 120;
+    private Label _optionsHint;
+
+    // Fix Wi-Fi: shown in the Options title row while the Wi-Fi card is stopped (see WifiDriver).
+    private TileButton _wifiBtn;
+    private WifiStatus _wifi;
+    private bool _wifiChecking, _wifiFixing, _wifiNotified;
+    private DateTime _wifiChecked;
+    // What the button and hint show; kept here so they survive the window being rebuilt.
+    private (bool Visible, string Text, Color Accent, bool Enabled, int Progress, string Hint, Color HintColor) _wifiUi;
+    private readonly System.Windows.Forms.Timer _wifiDone = new() { Interval = 5000 };
+    // After sleep or a network drop: look again once things have settled.
+    private readonly System.Windows.Forms.Timer _wifiRecheck = new() { Interval = 15_000 };
+
+    /// <summary>The Wi-Fi card was found stopped (once each time it breaks).</summary>
+    public event Action WifiStopped;
     private StepSlider _charge;
     private SegRow _modes, _gpu, _fans, _screen, _options, _kbEffects, _kbSpeed;
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
@@ -105,6 +123,7 @@ public sealed class MainForm : Form
             {
                 Updater.CleanUp();
                 _ = CheckStockSoftwareAsync();
+                _ = CheckWifiAsync("startup");
             }
             _updateTimer.Interval = 24 * 60 * 60 * 1000;
             if (Settings.Current.CheckForUpdates) _ = CheckForUpdatesAsync(manual: false);
@@ -116,6 +135,24 @@ public sealed class MainForm : Form
             OnStateChanged();
         });
         _ = CheckSoundAsync();
+
+        _wifiDone.Tick += (_, _) =>
+        {
+            _wifiDone.Stop();
+            if (_wifi?.State != WifiState.Stopped) ShowWifi(false);
+        };
+        _wifiRecheck.Tick += (_, _) =>
+        {
+            _wifiRecheck.Stop();
+            _ = CheckWifiAsync("recheck");
+        };
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+        Disposed += (_, _) =>
+        {
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+        };
     }
 
     private int S(float v) => (int)Math.Round(v * DeviceDpi / 96f * Theme.MainScale);
@@ -189,6 +226,7 @@ public sealed class MainForm : Form
         _trim.Stop();
         RefreshState();
         Task.Run(() => _c.RefreshSensors());
+        if ((DateTime.Now - _wifiChecked).TotalSeconds > 30) _ = CheckWifiAsync("window opened");
     }
 
     // ---------------- layout ----------------
@@ -301,23 +339,41 @@ public sealed class MainForm : Form
         _kbTimeoutDC = TimeoutButton("battery-saver", Pad + ContentWidth - timeoutW + 116, pluggedIn: false);
         _y += 32 + 12;
 
-        var optionsHint = Section("settings", "Options");
-        // Remove Stock App at the right end of the title row; only shown while the stock software is still there.
-        const int stockW = 150;
+        _optionsHint = Section("settings", "Options");
+        _optionsHint.Left = S(Pad + 110);
+        // Fix Wi-Fi and Remove Stock App at the right end of the title row, each shown only while needed
+        // (LayoutOptionsTitle places them).
         _stockBtn = new TileButton
         {
             Text = "Remove Stock App",
             Vertical = false,
             Font = _fSmall,
             Accent = Theme.Turbo,
-            Location = new Point(S(Pad + ContentWidth - stockW), S(_y - 28 - 3)),
-            Size = new Size(S(stockW), S(26)),
+            Location = new Point(S(Pad + ContentWidth - StockW), S(_y - 28 - 3)),
+            Size = new Size(S(StockW), S(26)),
             Visible = _stockFound,
         };
         _stockBtn.Click += (_, _) => OpenStockSoftware();
         _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
-        optionsHint.Width = S(ContentWidth - 200 - stockW - 10); // keep the empty hint off the button
         Controls.Add(_stockBtn);
+        _wifiBtn = new TileButton
+        {
+            Text = "Fix Wi-Fi",
+            Vertical = false,
+            Font = _fSmall,
+            Accent = Theme.Turbo,
+            Location = new Point(S(Pad + ContentWidth - WifiW), S(_y - 28 - 3)),
+            Size = new Size(S(WifiW), S(26)),
+            Visible = false,
+        };
+        _wifiBtn.Click += (_, _) =>
+        {
+            if (_wifiUi.Enabled && _wifi is { State: not WifiState.Working }) _ = FixWifiAsync();
+        };
+        _tips.SetToolTip(_wifiBtn,
+            "The Wi-Fi card has stopped. Fix Wi-Fi removes the old Intel Wi-Fi drivers and reinstalls the last one that worked.");
+        Controls.Add(_wifiBtn);
+        ApplyWifiUi();
         _options = Row(46, false, 18,
             new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"));
         _options.ButtonClicked += OnOptionClicked;
@@ -608,12 +664,165 @@ public sealed class MainForm : Form
             if (IsDisposed) return;
             _stockFound = any;
             if (_stockBtn is { IsDisposed: false }) _stockBtn.Visible = any;
+            LayoutOptionsTitle();
             if (any) Log.Info("Stock Control Center software found");
         }
         catch (Exception ex)
         {
             Log.Error("Checking for the stock software failed", ex);
         }
+    }
+
+    /// <summary>Right end of the Options title row: Fix Wi-Fi, then Remove Stock App, then the hint in the space left.</summary>
+    private void LayoutOptionsTitle()
+    {
+        if (_optionsHint is not { IsDisposed: false }) return;
+        int right = Pad + ContentWidth;
+        if (_wifiUi.Visible)
+        {
+            _wifiBtn.Left = S(right - WifiW);
+            right -= WifiW + 10;
+        }
+        if (_stockFound)
+        {
+            _stockBtn.Left = S(right - StockW);
+            right -= StockW + 10;
+        }
+        _optionsHint.Width = Math.Max(0, S(right) - _optionsHint.Left);
+    }
+
+    // ---------------- Wi-Fi ----------------
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume) RecheckWifiSoon();
+    }
+
+    private void OnNetworkAvailabilityChanged(object sender, NetworkAvailabilityEventArgs e)
+    {
+        if (!e.IsAvailable) RecheckWifiSoon();
+    }
+
+    private void RecheckWifiSoon()
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        BeginInvoke(new Action(() =>
+        {
+            _wifiRecheck.Stop();
+            _wifiRecheck.Start();
+        }));
+    }
+
+    /// <summary>
+    /// Looks at the Wi-Fi card: shows Fix Wi-Fi (and the popup, once) while it's stopped, and keeps a copy of the
+    /// working driver while it's fine.
+    /// </summary>
+    private async Task CheckWifiAsync(string reason)
+    {
+        if (_wifiChecking || _wifiFixing) return;
+        _wifiChecking = true;
+        _wifiChecked = DateTime.Now;
+        try
+        {
+            var status = await Task.Run(() =>
+            {
+                var s = WifiDriver.Check();
+                WifiDriver.SaveWorkingDriver(s);
+                return s;
+            });
+            if (IsDisposed) return;
+            bool wasStopped = _wifi?.State == WifiState.Stopped;
+            _wifi = status;
+            if (status.State == WifiState.Stopped)
+            {
+                if (!wasStopped) Log.Info($"Wi-Fi stopped ({reason}): {status.Name} · Code {status.Problem}");
+                ShowWifi(true, "Fix Wi-Fi", Theme.Turbo, true, -1, $"Wi-Fi Stopped · Code {status.Problem}", Theme.Warn);
+                if (!_wifiNotified)
+                {
+                    _wifiNotified = true;
+                    WifiStopped?.Invoke();
+                }
+            }
+            else
+            {
+                _wifiNotified = false;
+                if (!_wifiDone.Enabled) ShowWifi(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Wi-Fi check failed", ex);
+        }
+        finally
+        {
+            _wifiChecking = false;
+        }
+    }
+
+    private async Task FixWifiAsync()
+    {
+        if (_wifiFixing || _wifi == null || _wifi.State == WifiState.Working) return;
+        _wifiFixing = true;
+        _wifiDone.Stop();
+        var start = _wifi;
+        var progress = new Progress<(int Percent, string Step)>(p =>
+        {
+            if (!IsDisposed && _wifiFixing) ShowWifi(true, $"Fixing… {p.Percent}%", Theme.Turbo, false, p.Percent, p.Step);
+        });
+        ShowWifi(true, "Fixing… 0%", Theme.Turbo, false, 0, "Starting…");
+        try
+        {
+            var after = await Task.Run(() => WifiDriver.Repair(start, progress));
+            if (IsDisposed) return;
+            _wifiFixing = false;
+            _wifi = after;
+            _wifiChecked = DateTime.Now;
+            if (after.State == WifiState.Working)
+            {
+                _wifiNotified = false;
+                ShowWifi(true, "Fixed", Theme.Accent, true, -1, "Wi-Fi Working Again", Theme.Accent);
+                _wifiDone.Start();
+                _ = Task.Run(() => WifiDriver.SaveWorkingDriver(after));
+            }
+            else
+            {
+                ShowWifi(true, "Retry Fix", Theme.Turbo, true, -1, "Still Stopped · Shut Down Fully", Theme.Warn);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Wi-Fi fix failed", ex);
+            if (!IsDisposed) ShowWifi(true, "Retry Fix", Theme.Turbo, true, -1, "Fix Failed · See Log", Theme.Warn);
+        }
+        finally
+        {
+            _wifiFixing = false;
+        }
+    }
+
+    private void ShowWifi(bool visible, string text = null, Color accent = default, bool enabled = true, int progress = -1,
+        string hint = null, Color hintColor = default)
+    {
+        _wifiUi = (visible, text, accent, enabled, progress, hint, hintColor);
+        ApplyWifiUi();
+    }
+
+    private void ApplyWifiUi()
+    {
+        if (_wifiBtn is not { IsDisposed: false }) return;
+        var u = _wifiUi;
+        _wifiBtn.Visible = u.Visible;
+        if (u.Visible)
+        {
+            _wifiBtn.Text = u.Text;
+            _wifiBtn.Accent = u.Accent;
+            _wifiBtn.Active = u.Enabled; // coloured border, like the mockup; a disabled tile draws plain
+            _wifiBtn.Enabled = u.Enabled;
+            _wifiBtn.Progress = u.Progress;
+        }
+        _optionsHint.Text = u.Visible ? u.Hint ?? "" : "";
+        _optionsHint.ForeColor = u.HintColor == default ? Theme.Muted : u.HintColor;
+        LayoutOptionsTitle();
     }
 
     /// <summary>

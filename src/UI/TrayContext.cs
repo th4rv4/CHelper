@@ -21,6 +21,7 @@ public sealed class TrayContext : ApplicationContext
         _form = new MainForm();
         _form.QuitRequested += Quit;
         _form.UpdateFound += info => _fnKeys.ShowText("startup", $"Update Available · v{info.Version.ToString(3)}");
+        _form.WifiStopped += () => _fnKeys.ShowText("wifi-off", "Wi-Fi Stopped · Fix In C-Helper");
         _ = _form.Handle; // create the handle so background updates can marshal to the UI thread
         _fnKeys = new FnKeys(_form);
 

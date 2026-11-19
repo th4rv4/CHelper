@@ -57,6 +57,9 @@ public sealed class AppSettings
     public Dictionary<string, int> SoundMode { get; set; } = new();
     /// <summary>The user's tuning of each Sound Mode, per Listening On choice ("Headphones/Music"): effect values, EQ and Volume Boost.</summary>
     public Dictionary<string, Dictionary<string, float>> SoundProfiles { get; set; } = new();
+
+    /// <summary>Device ID of the Wi-Fi card, so it can still be found after its driver is gone.</summary>
+    public string WifiDeviceId { get; set; }
 }
 
 public static class Settings
