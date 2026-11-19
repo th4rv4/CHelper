@@ -14,6 +14,10 @@ namespace CHelper.Native;
 /// ("On (automatic template)") where Windows supports it (Windows 11). A reinstalled adapter (e.g. after Wi-Fi Driver
 /// Refresh) comes back with automatic DNS, so <see cref="Apply"/> runs again whenever the network changes; it only
 /// touches adapters that aren't set up yet.
+///
+/// Chromium browsers (Chrome, Edge, Brave) look up addresses themselves and only encrypt them for providers on their own
+/// list, which AdGuard isn't on, so their lookups would still go out unencrypted. While AdGuard DNS is on, their
+/// "Use secure DNS" is set to AdGuard through browser policy (the browser then shows "Managed by your organization").
 /// Needs admin, which C-Helper always has.
 /// </summary>
 public static class AdGuardDns
@@ -22,6 +26,14 @@ public static class AdGuardDns
     private static readonly string[] V6 = { "2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff" };
     private const string Template = "https://dns.adguard-dns.com/dns-query";
     private const string InterfaceKey = @"SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters";
+
+    /// <summary>Policy keys of the Chromium browsers (set even before a browser is installed, so it's covered from the start).</summary>
+    private static readonly (string Name, string Key)[] Browsers =
+    {
+        ("Chrome", @"SOFTWARE\Policies\Google\Chrome"),
+        ("Edge", @"SOFTWARE\Policies\Microsoft\Edge"),
+        ("Brave", @"SOFTWARE\Policies\BraveSoftware\Brave"),
+    };
 
     private static readonly Regex NotReal = new(
         "Virtual|Hyper-V|VPN|TAP-|Tunnel|Loopback|VMware|VirtualBox|WAN Miniport|Wi-Fi Direct|Npcap|WireGuard|Tailscale|ZeroTier|Cisco AnyConnect|Fortinet",
@@ -59,6 +71,7 @@ public static class AdGuardDns
     {
         lock (Gate)
         {
+            SetBrowsers(on: true);
             int changed = 0;
             foreach (var n in Adapters())
             {
@@ -91,6 +104,7 @@ public static class AdGuardDns
     {
         lock (Gate)
         {
+            SetBrowsers(on: false);
             Applied.Clear();
             foreach (var n in Adapters())
             {
@@ -178,6 +192,41 @@ public static class AdGuardDns
         catch (Exception ex)
         {
             Log.Error("Setting DNS over HTTPS failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Browser "Use secure DNS": AdGuard only, no falling back to unencrypted lookups (DnsOverHttpsMode "secure").
+    /// Only these two policy values are written or removed; any other policies stay as they are.
+    /// </summary>
+    private static void SetBrowsers(bool on)
+    {
+        foreach (var (name, key) in Browsers)
+        {
+            try
+            {
+                if (on)
+                {
+                    using var k = Registry.LocalMachine.CreateSubKey(key);
+                    if (k.GetValue("DnsOverHttpsMode") as string == "secure" && k.GetValue("DnsOverHttpsTemplates") as string == Template)
+                        continue;
+                    k.SetValue("DnsOverHttpsMode", "secure", RegistryValueKind.String);
+                    k.SetValue("DnsOverHttpsTemplates", Template, RegistryValueKind.String);
+                    Log.Info($"AdGuard DNS over HTTPS set in {name}");
+                }
+                else
+                {
+                    using var k = Registry.LocalMachine.OpenSubKey(key, writable: true);
+                    if (k == null || k.GetValue("DnsOverHttpsTemplates") as string != Template) continue;
+                    k.DeleteValue("DnsOverHttpsMode", throwOnMissingValue: false);
+                    k.DeleteValue("DnsOverHttpsTemplates", throwOnMissingValue: false);
+                    Log.Info($"AdGuard DNS over HTTPS removed from {name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Setting secure DNS in {name} failed", ex);
+            }
         }
     }
 
