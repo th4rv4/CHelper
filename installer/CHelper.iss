@@ -7,6 +7,8 @@
 ;   vendor\driver\*            Clevo ACPI bridge driver, installed with pnputil if included
 ;   vendor\sound\*             Sound Blaster Studio drivers (Creative Realtek extension, Creative's engine and
 ;                              speaker tuning), set up by Setup-SoundBlaster.ps1 on the EVOL P15's audio chip
+;   vendor\wifi\*              Intel Wi-Fi driver (AX210 / AX211), used by Wi-Fi Driver Refresh and installed with
+;                              pnputil when the Wi-Fi card has no working driver
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -59,6 +61,7 @@ Source: "{#Root}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\vendor\InsydeDCHU.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#Root}\vendor\driver\*"; DestDir: "{app}\driver"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\vendor\sound\*"; DestDir: "{app}\sound"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "{#Root}\vendor\wifi\*"; DestDir: "{app}\wifi"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\installer\Setup-SoundBlaster.ps1"; DestDir: "{app}\sound"; Flags: ignoreversion
 
 [Icons]
@@ -70,6 +73,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; Clevo ACPI bridge driver (only if it was bundled and the laptop is missing it)
 Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\driver\*.inf"" /install"; \
   StatusMsg: "Installing the Clevo ACPI bridge driver..."; Flags: runhidden waituntilterminated; Check: NeedsBridgeDriver
+; Intel Wi-Fi driver (only if it was bundled and the Wi-Fi card has no working driver, e.g. a clean Windows install)
+Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\wifi\*.inf"" /install"; \
+  StatusMsg: "Installing the Wi-Fi driver..."; Flags: runhidden waituntilterminated; Check: NeedsWifiDriver
 ; Same sign-in task C-Helper's own Startup option makes (runs elevated at sign-in, no UAC prompt). C-Helper
 ; writes it as XML so it also runs on battery: plain "schtasks /create" lets Windows stop it on unplug.
 Filename: "{app}\{#AppExe}"; Parameters: "--install-task"; StatusMsg: "Setting up start at sign-in..."; \
@@ -176,6 +182,24 @@ begin
        '-NoProfile -Command "if ((Get-PnpDevice -InstanceId ''ACPI\CLV0001*'' -ErrorAction SilentlyContinue | Where-Object Status -eq ''OK'')) { exit 0 } else { exit 1 }"',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Result := ResultCode <> 0;
+end;
+
+// Install the bundled Wi-Fi driver only when no Wi-Fi adapter is working and an Intel PCI device is waiting for a
+// driver (the Wi-Fi card on a clean Windows install). Otherwise Windows' own driver stays as it is.
+function NeedsWifiDriver(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := False;
+  if not DirExists(ExpandConstant('{app}\wifi')) then
+    Exit;
+  // Exit code 1 = no working Wi-Fi adapter and an Intel PCI device without a working driver
+  if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -Command "$ok = Get-PnpDevice -Class Net -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match ''Wi-?Fi|Wireless'' -and $_.Status -eq ''OK'' }; ' +
+       '$bad = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like ''PCI\VEN_8086*'' -and $_.Status -ne ''OK'' -and (-not $_.Class -or $_.Class -eq ''Net'') }; ' +
+       'if ($ok -or -not $bad) { exit 0 } else { exit 1 }"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := ResultCode = 1;
 end;
 
 // ---------- Sound Blaster Studio ----------

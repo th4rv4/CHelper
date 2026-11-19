@@ -19,8 +19,9 @@ public sealed record WifiStatus(WifiState State, string Name, string DeviceId, i
 /// driver packs and Windows Update), put back one known-good copy and let Windows set the card up again.
 ///
 /// The known-good copy is saved by C-Helper itself: whenever the card is working, the driver package it is using is
-/// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes). Without a saved copy the fix
-/// can only restart the card.
+/// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes). Until then (a fresh install)
+/// the driver bundled with C-Helper is used ("wifi" next to the exe, from vendor/wifi). With neither, the fix can only
+/// restart the card.
 /// Needs admin, which C-Helper always has.
 /// </summary>
 public static class WifiDriver
@@ -31,6 +32,7 @@ public static class WifiDriver
     private static readonly string BackupRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiDriver");
     private static string BackupVersionFile => Path.Combine(BackupRoot, "version.txt");
+    private static string BundledRoot => Path.Combine(AppContext.BaseDirectory, "wifi");
 
     /// <summary>Version of the saved driver copy, or null when there is none yet.</summary>
     public static string SavedVersion
@@ -83,6 +85,25 @@ public static class WifiDriver
                 // Seen before but not in the device list at all any more.
                 return new WifiStatus(WifiState.Missing, "Wi-Fi", id, 0);
             }
+
+            // Never seen working (fresh Windows): an Intel card without a driver shows up as an unknown "Network
+            // Controller". Recognise it by the hardware IDs in the driver C-Helper would install.
+            string infText = KnownInfText();
+            if (infText.Length > 0)
+            {
+                using var driverless = new ManagementObjectSearcher(
+                    @"SELECT Name, PNPDeviceID, ConfigManagerErrorCode FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0 AND PNPDeviceID LIKE 'PCI\\VEN_8086%'");
+                foreach (ManagementObject o in driverless.Get())
+                {
+                    using (o)
+                    {
+                        string devId = o["PNPDeviceID"] as string ?? "";
+                        var hw = Regex.Match(devId, @"^PCI\\VEN_8086&DEV_[0-9A-F]{4}&SUBSYS_[0-9A-F]{8}", RegexOptions.IgnoreCase);
+                        if (hw.Success && infText.Contains(hw.Value, StringComparison.OrdinalIgnoreCase))
+                            return ToStatus(o["Name"] as string ?? "Wi-Fi", devId, o["ConfigManagerErrorCode"]);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -104,6 +125,44 @@ public static class WifiDriver
     }
 
     private static string Wql(string s) => s.Replace("\\", "\\\\").Replace("'", "\\'");
+
+    private static string _infText;
+
+    /// <summary>Text of the driver C-Helper would install (saved copy, else bundled), for matching hardware IDs.</summary>
+    private static string KnownInfText()
+    {
+        if (_infText != null) return _infText;
+        try
+        {
+            var (folder, _) = DriverSource();
+            _infText = folder == null ? "" : string.Concat(
+                Directory.GetFiles(folder, "*.inf", SearchOption.AllDirectories).Where(IsIntelWifiInf).Select(File.ReadAllText));
+        }
+        catch
+        {
+            _infText = "";
+        }
+        return _infText;
+    }
+
+    /// <summary>Where a clean reinstall takes the driver from: C-Helper's saved copy, else the bundled one.</summary>
+    private static (string Folder, string Version) DriverSource()
+    {
+        string saved = SavedVersion;
+        if (saved != null) return (BackupRoot, saved);
+        try
+        {
+            if (!Directory.Exists(BundledRoot)) return (null, null);
+            foreach (string inf in Directory.GetFiles(BundledRoot, "*.inf", SearchOption.AllDirectories).Where(IsIntelWifiInf))
+            {
+                var ver = Regex.Match(File.ReadAllText(inf), @"^\s*DriverVer\s*=\s*[^,]*,\s*([\d.]+)",
+                    RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                return (BundledRoot, ver.Success ? ver.Groups[1].Value : "bundled");
+            }
+        }
+        catch { }
+        return (null, null);
+    }
 
     // ---------------------------------------------------------------- keep a good copy
 
@@ -157,7 +216,7 @@ public static class WifiDriver
     // ---------------------------------------------------------------- fix
 
     /// <summary>
-    /// Fixes a stopped card: clean reinstall from the saved copy (or just a restart of the card when there is no copy),
+    /// Fixes a stopped card: clean reinstall from the saved (or bundled) copy, or just a restart of the card without one,
     /// then waits for it to come back. Reports (percent, step) as it goes. Returns the card's state afterwards.
     /// </summary>
     public static WifiStatus Repair(WifiStatus status, IProgress<(int Percent, string Step)> progress)
@@ -168,19 +227,19 @@ public static class WifiDriver
             WifiState.Working => $"Wi-Fi driver refresh: {status.Name} (working)",
             _ => $"Wi-Fi driver refresh: {status.Name} · Code {status.Problem}",
         });
-        string saved = SavedVersion;
+        var (source, version) = DriverSource();
 
-        if (saved == null)
+        if (source == null)
         {
             if (status.State == WifiState.Missing)
             {
-                Log.Info("No saved Wi-Fi driver yet: looking for the card again only");
+                Log.Info("No saved or bundled Wi-Fi driver: looking for the card again only");
                 progress.Report((30, "Looking For The Card…"));
                 PnpUtil("/scan-devices");
             }
             else
             {
-                Log.Info("No saved Wi-Fi driver yet: restarting the card only");
+                Log.Info("No saved or bundled Wi-Fi driver: restarting the card only");
                 progress.Report((30, "Restarting The Card…"));
                 if (!string.IsNullOrEmpty(status.DeviceId)) PnpUtil($"/restart-device \"{status.DeviceId}\"");
             }
@@ -196,9 +255,10 @@ public static class WifiDriver
             progress.Report((10 + 40 * (i + 1) / stale.Count, "Removing Old Drivers…"));
         }
 
-        progress.Report((55, $"Reinstalling Driver {saved}…"));
-        var (addExit, addOutput) = PnpUtil($"/add-driver \"{Path.Combine(BackupRoot, "*.inf")}\" /subdirs /install");
-        Log.Info($"Reinstalled the saved Wi-Fi driver {saved} ({addExit})" + (addExit is 0 or 3010 ? "" : $": {addOutput}"));
+        string from = source == BackupRoot ? "saved" : "bundled";
+        progress.Report((55, $"Reinstalling Driver {version}…"));
+        var (addExit, addOutput) = PnpUtil($"/add-driver \"{Path.Combine(source, "*.inf")}\" /subdirs /install");
+        Log.Info($"Reinstalled the {from} Wi-Fi driver {version} ({addExit})" + (addExit is 0 or 3010 ? "" : $": {addOutput}"));
 
         progress.Report((75, "Starting The Card…"));
         PnpUtil("/scan-devices");
