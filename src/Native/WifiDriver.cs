@@ -22,6 +22,10 @@ public sealed record WifiStatus(WifiState State, string Name, string DeviceId, i
 /// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes). Until then (a fresh install)
 /// the driver bundled with C-Helper is used ("wifi" next to the exe, from vendor/wifi). With neither, the fix can only
 /// restart the card.
+///
+/// Windows keeps the saved Wi-Fi networks per adapter, so a reinstalled card starts with none. While Wi-Fi works,
+/// C-Helper also exports them to %ProgramData%\CHelper\WifiNetworks (passwords stay encrypted, readable only by this
+/// laptop) and adds them back after a refresh.
 /// Needs admin, which C-Helper always has.
 /// </summary>
 public static class WifiDriver
@@ -33,6 +37,8 @@ public static class WifiDriver
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiDriver");
     private static string BackupVersionFile => Path.Combine(BackupRoot, "version.txt");
     private static string BundledRoot => Path.Combine(AppContext.BaseDirectory, "wifi");
+    private static readonly string NetworksRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiNetworks");
 
     /// <summary>Version of the saved driver copy, or null when there is none yet.</summary>
     public static string SavedVersion
@@ -173,6 +179,7 @@ public static class WifiDriver
     public static void SaveWorkingDriver(WifiStatus status)
     {
         if (status.State != WifiState.Working || string.IsNullOrEmpty(status.DeviceId)) return;
+        SaveNetworks();
         try
         {
             var (inf, version) = DriverInUse(status.DeviceId);
@@ -220,6 +227,18 @@ public static class WifiDriver
     /// then waits for it to come back. Reports (percent, step) as it goes. Returns the card's state afterwards.
     /// </summary>
     public static WifiStatus Repair(WifiStatus status, IProgress<(int Percent, string Step)> progress)
+    {
+        if (status.State == WifiState.Working) SaveNetworks(); // the latest list, before the card loses it
+        var after = ReinstallDriver(status, progress);
+        if (after.State == WifiState.Working)
+        {
+            progress.Report((99, "Restoring Saved Networks…"));
+            RestoreNetworks();
+        }
+        return after;
+    }
+
+    private static WifiStatus ReinstallDriver(WifiStatus status, IProgress<(int Percent, string Step)> progress)
     {
         Log.Info(status.State switch
         {
@@ -309,10 +328,66 @@ public static class WifiDriver
         catch { return false; }
     }
 
-    private static (int Exit, string Output) PnpUtil(string args)
+    // ---------------------------------------------------------------- saved networks
+
+    /// <summary>
+    /// Exports the Wi-Fi networks Windows knows. Without key=clear the passwords stay encrypted so that only this laptop
+    /// can read them, which is enough to add them back here. An empty export never replaces a good one.
+    /// </summary>
+    private static void SaveNetworks()
+    {
+        string temp = NetworksRoot + ".new";
+        try
+        {
+            if (Directory.Exists(temp)) Directory.Delete(temp, true);
+            Directory.CreateDirectory(temp);
+            var (exit, output) = Run("netsh.exe", $"wlan export profile folder=\"{temp}\"");
+            int count = Directory.GetFiles(temp, "*.xml").Length;
+            if (count == 0)
+            {
+                if (exit != 0) Log.Error($"Saving the Wi-Fi networks failed ({exit}): {output}");
+                Directory.Delete(temp, true);
+                return;
+            }
+            int before = Directory.Exists(NetworksRoot) ? Directory.GetFiles(NetworksRoot, "*.xml").Length : -1;
+            if (Directory.Exists(NetworksRoot)) Directory.Delete(NetworksRoot, true);
+            Directory.Move(temp, NetworksRoot);
+            if (count != before) Log.Info($"Saved {count} Wi-Fi networks");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Saving the Wi-Fi networks failed", ex);
+        }
+    }
+
+    /// <summary>Adds the saved Wi-Fi networks back (after a refresh the card starts with none).</summary>
+    private static void RestoreNetworks()
+    {
+        try
+        {
+            if (!Directory.Exists(NetworksRoot)) return;
+            int added = 0;
+            var files = Directory.GetFiles(NetworksRoot, "*.xml");
+            foreach (string file in files)
+            {
+                var (exit, output) = Run("netsh.exe", $"wlan add profile filename=\"{file}\" user=all");
+                if (exit == 0) added++;
+                else Log.Error($"Adding Wi-Fi network {Path.GetFileNameWithoutExtension(file)} back failed ({exit}): {output}");
+            }
+            Log.Info($"Added {added} of {files.Length} saved Wi-Fi networks back");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Adding the saved Wi-Fi networks back failed", ex);
+        }
+    }
+
+    private static (int Exit, string Output) PnpUtil(string args) => Run("pnputil.exe", args);
+
+    private static (int Exit, string Output) Run(string exe, string args)
     {
         // A 32-bit process would get the redirected (and missing) SysWOW64 copy; C-Helper is 64-bit.
-        var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "pnputil.exe"), args)
+        var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, exe), args)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
