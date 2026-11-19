@@ -29,16 +29,18 @@ public sealed class MainForm : Form
     private TileButton _fullCharge;
     private TileButton _stockBtn;
     private bool _stockFound; // kept here so the button survives the window being rebuilt
-    private const int StockW = 150, WifiW = 120;
+    private const int StockW = 150, WifiW = 150;
     private Label _optionsHint;
 
-    // Fix Wi-Fi: shown in the Options title row while the Wi-Fi card is stopped (see WifiDriver).
+    // Wi-Fi Driver Refresh in the Options title row; red while the Wi-Fi card is stopped or missing (see WifiDriver).
+    private const string WifiLabel = "Wi-Fi Driver Refresh";
     private TileButton _wifiBtn;
     private WifiStatus _wifi;
     private bool _wifiChecking, _wifiFixing, _wifiNotified;
     private DateTime _wifiChecked;
     // What the button and hint show; kept here so they survive the window being rebuilt.
-    private (bool Visible, string Text, Color Accent, bool Enabled, int Progress, string Hint, Color HintColor) _wifiUi;
+    private (bool Visible, string Text, Color Accent, bool Active, bool Enabled, int Progress, string Hint, Color HintColor) _wifiUi =
+        (true, WifiLabel, Theme.Turbo, false, true, -1, null, default);
     private readonly System.Windows.Forms.Timer _wifiDone = new() { Interval = 5000 };
     // After sleep or a network drop: look again once things have settled.
     private readonly System.Windows.Forms.Timer _wifiRecheck = new() { Interval = 15_000 };
@@ -139,7 +141,7 @@ public sealed class MainForm : Form
         _wifiDone.Tick += (_, _) =>
         {
             _wifiDone.Stop();
-            if (!WifiBroken(_wifi)) ShowWifi(false);
+            ShowWifiState();
         };
         _wifiRecheck.Tick += (_, _) =>
         {
@@ -341,8 +343,7 @@ public sealed class MainForm : Form
 
         _optionsHint = Section("settings", "Options");
         _optionsHint.Left = S(Pad + 110);
-        // Fix Wi-Fi and Remove Stock App at the right end of the title row, each shown only while needed
-        // (LayoutOptionsTitle places them).
+        // Wi-Fi Driver Refresh and Remove Stock App at the right end of the title row (LayoutOptionsTitle places them).
         _stockBtn = new TileButton
         {
             Text = "Remove Stock App",
@@ -358,7 +359,7 @@ public sealed class MainForm : Form
         Controls.Add(_stockBtn);
         _wifiBtn = new TileButton
         {
-            Text = "Fix Wi-Fi",
+            Text = WifiLabel,
             Vertical = false,
             Font = _fSmall,
             Accent = Theme.Turbo,
@@ -368,10 +369,10 @@ public sealed class MainForm : Form
         };
         _wifiBtn.Click += (_, _) =>
         {
-            if (_wifiUi.Enabled && WifiBroken(_wifi)) _ = FixWifiAsync();
+            if (_wifiUi.Enabled) _ = FixWifiAsync();
         };
         _tips.SetToolTip(_wifiBtn,
-            "The Wi-Fi card has stopped. Fix Wi-Fi removes the old Intel Wi-Fi drivers and reinstalls the last one that worked.");
+            "Removes every Intel Wi-Fi driver on the laptop and reinstalls the last one that worked. Use it when Wi-Fi stops or disappears.");
         Controls.Add(_wifiBtn);
         ApplyWifiUi();
         _options = Row(46, false, 18,
@@ -673,7 +674,7 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>Right end of the Options title row: Fix Wi-Fi, then Remove Stock App, then the hint in the space left.</summary>
+    /// <summary>Right end of the Options title row: Wi-Fi Driver Refresh, then Remove Stock App, then the hint in the space left.</summary>
     private void LayoutOptionsTitle()
     {
         if (_optionsHint is not { IsDisposed: false }) return;
@@ -714,7 +715,7 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
-    /// Looks at the Wi-Fi card: shows Fix Wi-Fi (and the popup, once) while it's stopped, and keeps a copy of the
+    /// Looks at the Wi-Fi card: turns Wi-Fi Driver Refresh red (and shows the popup, once) while it's stopped, keeps a copy of the
     /// working driver while it's fine.
     /// </summary>
     private async Task CheckWifiAsync(string reason)
@@ -738,8 +739,7 @@ public sealed class MainForm : Form
                 bool missing = status.State == WifiState.Missing;
                 if (!wasBroken)
                     Log.Info(missing ? $"Wi-Fi card missing ({reason})" : $"Wi-Fi stopped ({reason}): {status.Name} · Code {status.Problem}");
-                ShowWifi(true, "Fix Wi-Fi", Theme.Turbo, true, -1,
-                    missing ? "Wi-Fi Card Missing" : $"Wi-Fi Stopped · Code {status.Problem}", Theme.Warn);
+                ShowWifiState();
                 if (!_wifiNotified)
                 {
                     _wifiNotified = true;
@@ -749,7 +749,7 @@ public sealed class MainForm : Form
             else
             {
                 _wifiNotified = false;
-                if (!_wifiDone.Enabled) ShowWifi(false);
+                if (!_wifiDone.Enabled) ShowWifiState();
             }
         }
         catch (Exception ex)
@@ -767,15 +767,23 @@ public sealed class MainForm : Form
 
     private async Task FixWifiAsync()
     {
-        if (_wifiFixing || !WifiBroken(_wifi)) return;
+        if (_wifiFixing) return;
+        if (_wifi == null) await CheckWifiAsync("refresh clicked");
+        if (IsDisposed || _wifiFixing || _wifi == null || _wifi.State == WifiState.NotFound) return;
+        if (!WifiBroken(_wifi) && MessageBox.Show(this,
+                "Wi-Fi Driver Refresh removes every Intel Wi-Fi driver on this laptop and reinstalls the last one that worked.\n\n" +
+                "Wi-Fi drops for a few seconds while it runs. Refresh now?",
+                "C-Helper", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
         _wifiFixing = true;
         _wifiDone.Stop();
         var start = _wifi;
         var progress = new Progress<(int Percent, string Step)>(p =>
         {
-            if (!IsDisposed && _wifiFixing) ShowWifi(true, $"Fixing… {p.Percent}%", Theme.Turbo, false, p.Percent, p.Step);
+            if (!IsDisposed && _wifiFixing) ShowWifi(true, $"Refreshing… {p.Percent}%", Theme.Turbo, false, false, p.Percent, p.Step);
         });
-        ShowWifi(true, "Fixing… 0%", Theme.Turbo, false, 0, "Starting…");
+        ShowWifi(true, "Refreshing… 0%", Theme.Turbo, false, false, 0, "Starting…");
         try
         {
             var after = await Task.Run(() => WifiDriver.Repair(start, progress));
@@ -786,19 +794,19 @@ public sealed class MainForm : Form
             if (after.State == WifiState.Working)
             {
                 _wifiNotified = false;
-                ShowWifi(true, "Fixed", Theme.Accent, true, -1, "Wi-Fi Working Again", Theme.Accent);
+                ShowWifi(true, "Done", Theme.Accent, true, true, -1, "Wi-Fi Working Again", Theme.Accent);
                 _wifiDone.Start();
                 _ = Task.Run(() => WifiDriver.SaveWorkingDriver(after));
             }
             else
             {
-                ShowWifi(true, "Retry Fix", Theme.Turbo, true, -1, "Still Stopped · Shut Down Fully", Theme.Warn);
+                ShowWifi(true, WifiLabel, Theme.Turbo, true, true, -1, "Still Stopped · Shut Down Fully", Theme.Warn);
             }
         }
         catch (Exception ex)
         {
-            Log.Error("Wi-Fi fix failed", ex);
-            if (!IsDisposed) ShowWifi(true, "Retry Fix", Theme.Turbo, true, -1, "Fix Failed · See Log", Theme.Warn);
+            Log.Error("Wi-Fi driver refresh failed", ex);
+            if (!IsDisposed) ShowWifi(true, WifiLabel, Theme.Turbo, true, true, -1, "Refresh Failed · See Log", Theme.Warn);
         }
         finally
         {
@@ -806,10 +814,20 @@ public sealed class MainForm : Form
         }
     }
 
-    private void ShowWifi(bool visible, string text = null, Color accent = default, bool enabled = true, int progress = -1,
-        string hint = null, Color hintColor = default)
+    /// <summary>The button for the last check: red with the problem while the card is broken, plain otherwise.</summary>
+    private void ShowWifiState()
     {
-        _wifiUi = (visible, text, accent, enabled, progress, hint, hintColor);
+        if (_wifi?.State == WifiState.NotFound) ShowWifi(false);
+        else if (WifiBroken(_wifi))
+            ShowWifi(true, WifiLabel, Theme.Turbo, true, true, -1,
+                _wifi.State == WifiState.Missing ? "Wi-Fi Card Missing" : $"Wi-Fi Stopped · Code {_wifi.Problem}", Theme.Warn);
+        else ShowWifi(true, WifiLabel, Theme.Turbo, false, true);
+    }
+
+    private void ShowWifi(bool visible, string text = null, Color accent = default, bool active = false, bool enabled = true,
+        int progress = -1, string hint = null, Color hintColor = default)
+    {
+        _wifiUi = (visible, text, accent, active, enabled, progress, hint, hintColor);
         ApplyWifiUi();
     }
 
@@ -822,7 +840,7 @@ public sealed class MainForm : Form
         {
             _wifiBtn.Text = u.Text;
             _wifiBtn.Accent = u.Accent;
-            _wifiBtn.Active = u.Enabled; // coloured border, like the mockup; a disabled tile draws plain
+            _wifiBtn.Active = u.Active;
             _wifiBtn.Enabled = u.Enabled;
             _wifiBtn.Progress = u.Progress;
         }

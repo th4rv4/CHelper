@@ -162,9 +162,12 @@ public static class WifiDriver
     /// </summary>
     public static WifiStatus Repair(WifiStatus status, IProgress<(int Percent, string Step)> progress)
     {
-        Log.Info(status.State == WifiState.Missing
-            ? $"Fixing Wi-Fi: card missing ({status.DeviceId})"
-            : $"Fixing Wi-Fi: {status.Name} · Code {status.Problem}");
+        Log.Info(status.State switch
+        {
+            WifiState.Missing => $"Wi-Fi driver refresh: card missing ({status.DeviceId})",
+            WifiState.Working => $"Wi-Fi driver refresh: {status.Name} (working)",
+            _ => $"Wi-Fi driver refresh: {status.Name} · Code {status.Problem}",
+        });
         string saved = SavedVersion;
 
         if (saved == null)
