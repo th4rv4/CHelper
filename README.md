@@ -68,14 +68,26 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 
 ### 🌀 Fan Curves
 
-Pick **Custom** in the Fans row, then **Edit Curves**. Each power mode has its own CPU and GPU curve (8 points, drag to edit), with presets tuned for the i7-13620H (TjMax 100 °C) and the RTX 4060 Laptop at 100 W (throttles around 87 °C):
+Pick **Custom** in the Fans row, then **Edit Curves**. Each power mode has its own CPU and GPU curve (8 points, drag to edit). The presets are tuned for the i7-13620H (TjMax 100 °C) and the RTX 4060 Laptop (throttles from 90 °C), from measuring what the BIOS does in each power mode under full load. Each one reaches full speed a few degrees **before** the limit of the power mode it's made for, so the fans do the cooling instead of the BIOS cutting power:
 
-| Preset | CPU | GPU | Use |
+| Preset | Default for | CPU | GPU | Use |
+|---|---|---|---|---|
+| **Quiet** | Quiet, Power Saving | off until 60 °C, full speed by 90 °C | off until ~56 °C, full speed by 86 °C | browsing, light work |
+| **Balanced** | Balanced | off until 40 °C, full speed by 84 °C | full speed by 80 °C | everyday; Balanced holds the CPU at 87 °C, so the fans are at full speed before that |
+| **Gaming** | Turbo | 30 % minimum, full speed by 80 °C | 30 % minimum, full speed by 73 °C | gaming, long renders; ramps early so games that don't max the laptop out still run cooler, and the GPU stays well clear of its 90 °C throttle point |
+
+For more than Gaming, pick **Maximum** in the Fans row.
+
+What the stock BIOS does with the fans on **Automatic** (measured with a full CPU + GPU load):
+
+| Power Mode | Fans | CPU | GPU |
 |---|---|---|---|
-| **Quiet** | off until 60 °C | off until ~56 °C | browsing, light work |
-| **Balanced** | off until 40 °C, steady ramp | full speed by 85 °C | everyday |
-| **Gaming** | always on, moderate | full speed by 77 °C | keeps the GPU under ~78 °C so it holds its boost |
-| **Cool** | 30 % minimum | full speed by 75 °C | long renders, hot rooms |
+| **Turbo** | up to 100 % | ~52 W, held at ~98 °C | 100 W, throttles from 90 °C |
+| **Balanced** | stop at **68 %** | held at **87 °C** by cutting power (81 W → 35 W) | 70 W |
+| **Power Saving** | stop at 68 % | 15 W | 70 W |
+| **Quiet** | stop at **50 %** | 15 W | 70 W, up to 87 °C |
+
+With Custom curves in Balanced, the fans go past the stock 68 %, which keeps more CPU power and a cooler GPU under load, and they calm down much sooner after it.
 
 <img width="1000" alt="Fan presets" src="docs/fan-presets.png" />
 

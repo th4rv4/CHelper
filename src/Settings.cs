@@ -98,6 +98,7 @@ public static class Settings
                     ? new FanCurveSet { Cpu = s.FanCurveCpu, Gpu = s.FanCurveGpu, Preset = s.FanPreset ?? "Custom" }
                     : FanCurveSet.Default(mode);
             }
+            FanCurve.Upgrade(set);
             set.Cpu = FanCurve.Sanitize(set.Cpu, gpu: false);
             set.Gpu = FanCurve.Sanitize(set.Gpu, gpu: true);
             s.FanCurves[mode] = set;
