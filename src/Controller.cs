@@ -432,8 +432,9 @@ public sealed class Controller
         if (Interlocked.Exchange(ref _sensing, 1) == 1) return; // a slow read is still running
         try
         {
-            CpuFan = Clevo.ReadCpuFan();
-            GpuFan = Clevo.ReadGpuFan();
+            var rpm = Clevo.ReadFanRpm();
+            CpuFan = Clevo.ReadCpuFan() with { Rpm = rpm.Cpu };
+            GpuFan = Clevo.ReadGpuFan() with { Rpm = rpm.Gpu };
             CpuLoad = CpuStats.Read();
             // Only ask the NVIDIA driver while the dGPU is on and not being switched.
             if (DgpuPresent && !GpuBusy) GpuLoad = NvGpu.Read();

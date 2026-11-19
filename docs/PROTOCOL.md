@@ -44,7 +44,7 @@ Writes that carry a sub-command pack the value in the low bytes and the sub-comm
 | Keyboard backlight timeout | Write `0x79`, sub `0x18` | value = seconds << 8 \| 0xFF; 0 = never (vendor default 30 s) | from vendor code |
 | CPU fan / temp | Read `0x63` | byte0 = duty 0–255, byte2 = °C | confirmed |
 | GPU fan / temp | Read `0x64` | byte0 = duty 0–255, byte2 = °C (meaningless while dGPU is off) | confirmed |
-| Fan RPM | not exposed; vendor appears to scale it from duty (~82 RPM per %) | — | — |
+| Fan RPM | Package_Read `12` | bytes 2–3 = CPU fan, 4–5 = GPU fan, big-endian tachometer period; RPM = 2156250 / period, 0 = stopped (vendor Fan Speed Setting app; ~2,430 RPM at 30%, ~7,190 / 6,600 at 100%) | confirmed |
 | BIOS features | Read `0x52`, `0x7A` | `0x04290025`, `0x60020053` | read only |
 
 ### dGPU off / on (vendor `cc30wk.exe 0x0013`)

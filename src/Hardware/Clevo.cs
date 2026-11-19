@@ -33,7 +33,14 @@ public enum FanMode
 }
 
 /// <summary>Live fan duty (0-100 %) and temperature (°C) for one fan.</summary>
-public readonly record struct FanInfo(int Temp, int Duty);
+/// <summary>Rpm is the measured fan speed: 0 = stopped, -1 = not known.</summary>
+public readonly record struct FanInfo(int Temp, int Duty, int Rpm = -1)
+{
+    /// <summary>"Fan 30% · 2,430 RPM", "Fan Off" when it isn't spinning, or "Fan 30%" when the speed isn't known.</summary>
+    public string Text => Rpm == 0 ? "Fan Off"
+        : Rpm > 0 ? $"Fan {Duty}% · {Rpm.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} RPM"
+        : $"Fan {Duty}%";
+}
 
 public static class Clevo
 {
@@ -49,6 +56,29 @@ public static class Clevo
 
     public static FanInfo ReadCpuFan() => ReadFan(CmdFanCpu);
     public static FanInfo ReadGpuFan() => ReadFan(CmdFanGpu);
+
+    // Measured fan speeds: package 12 holds each fan's tachometer period, big-endian,
+    // CPU fan in bytes 2-3 and GPU fan in bytes 4-5. RPM = 2,156,250 / period, 0 = stopped.
+    private const int PkgFanSpeed = 12;
+
+    /// <summary>Measured CPU and GPU fan RPM; -1 when it can't be read.</summary>
+    public static (int Cpu, int Gpu) ReadFanRpm()
+    {
+        try
+        {
+            var b = Dchu.GetBuffer(PkgFanSpeed);
+            return (Rpm(b[2], b[3]), Rpm(b[4], b[5]));
+        }
+        catch { return (-1, -1); }
+    }
+
+    private static int Rpm(byte hi, byte lo)
+    {
+        int period = hi << 8 | lo;
+        if (period == 0) return 0;
+        int rpm = (int)Math.Round(2156250.0 / period);
+        return rpm > 15000 ? -1 : rpm; // nothing in a laptop spins that fast: a bad read
+    }
 
     private const int CmdOpt = 0x79;
     private const int SubProfile = 0x19;

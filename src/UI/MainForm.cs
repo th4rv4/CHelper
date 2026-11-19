@@ -997,7 +997,7 @@ public sealed class MainForm : Form
 
         var gpu = _c.GpuFan;
         _gpuHint.Text = _c.GpuBusy ? "Switching…"
-            : !_c.DgpuPresent && !_c.InUltimate ? $"dGPU Off · Fan {gpu.Duty}%"
+            : !_c.DgpuPresent && !_c.InUltimate ? $"dGPU Off · {gpu.Text}"
             : gpu.Temp > 0 || _c.GpuLoad.Usage >= 0 ? Readout("GPU", _c.GpuLoad, gpu)
             : _c.InUltimate ? "dGPU Only" : "dGPU On";
     }
@@ -1009,7 +1009,7 @@ public sealed class MainForm : Form
         if (load.Usage >= 0) parts.Add($"{name} {load.Usage}%");
         if (load.Mhz > 0) parts.Add($"{load.Mhz / 1000.0:0.0} GHz");
         if (fan.Temp > 0) parts.Add(parts.Count == 0 ? $"{name} {fan.Temp}°C" : $"{fan.Temp}°C");
-        if (fan.Temp > 0) parts.Add($"Fan {fan.Duty}%");
+        if (fan.Temp > 0) parts.Add(fan.Text);
         return string.Join(" · ", parts);
     }
 

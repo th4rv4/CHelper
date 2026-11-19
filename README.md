@@ -28,7 +28,7 @@ Small and lightweight alternative to the vendor **Control Center** for the **Col
 5. **Keyboard lighting**: colour, brightness slider and effects (Static, Breathing, Color Cycle, Heat)
 6. Keyboard backlight timer, separate for plugged in and on battery
 7. **Battery charge limit** (60–100 %) with **Full Charge Once** for trips, charge, charging / discharging watts and battery health
-8. Live CPU / GPU usage, clock speed, temperature and fan speed
+8. Live CPU / GPU usage, clock speed, temperature, and fan speed in % and real RPM
 9. On-screen popups for Fn keys, Caps / Num / Scroll Lock, camera, touchpad and mode changes
 10. Each power mode also sets the matching **Windows power mode**
 11. Camera on / off, run on startup, tray menu

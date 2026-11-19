@@ -286,8 +286,8 @@ public sealed class FanCurveForm : Form
             bool dgpu = _c.DgpuPresent || _c.InUltimate;
             _cpu.NowTemp = cpu.Temp;
             _gpu.NowTemp = dgpu ? gpu.Temp : 0;
-            _cpuNow.Text = cpu.Temp > 0 ? $"{cpu.Temp}°C · Fan {cpu.Duty}%" : "";
-            _gpuNow.Text = dgpu ? $"{gpu.Temp}°C · Fan {gpu.Duty}%" : $"dGPU Off · Fan {gpu.Duty}%";
+            _cpuNow.Text = cpu.Temp > 0 ? $"{cpu.Temp}°C · {cpu.Text}" : "";
+            _gpuNow.Text = dgpu ? $"{gpu.Temp}°C · {gpu.Text}" : $"dGPU Off · {gpu.Text}";
             _cpu.Invalidate();
             _gpu.Invalidate();
         }));
