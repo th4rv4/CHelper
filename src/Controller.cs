@@ -128,6 +128,7 @@ public sealed class Controller
         Safe("camera", () => Clevo.SetWebcam(S.Camera));
         Safe("gpu", () => ApplyGpu());
         Safe("screen", () => ApplyScreen());
+        Safe("clamshell", ApplyClamshell);
         Changed();
         ReassertKeyboardBrightness();
     }
@@ -153,6 +154,8 @@ public sealed class Controller
         Safe("gpu", () => ApplyGpu());
         Safe("screen", () => ApplyScreen());
         CheckFullChargeOnce();
+        Safe("clamshell", ApplyClamshell);
+        Safe("clamshell", ClamshellUnplugged);
         Safe("keyboard", () =>
         {
             Clevo.SetKeyboardTimeout(KeyboardTimeoutNow);
@@ -312,6 +315,8 @@ public sealed class Controller
     public void Shutdown()
     {
         StopCurves("exit");
+        // Without C-Helper running nothing would put the laptop to sleep when unplugged with the lid shut.
+        if (S.Clamshell) Safe("clamshell", RestoreLidAction);
         if (Effects.Running)
         {
             Effects.Stop();
@@ -569,6 +574,46 @@ public sealed class Controller
         S.FnEscOpensHelper = on;
         Settings.Save();
         Changed();
+    }
+
+    // ---------------- Clamshell ----------------
+
+    public void SetClamshell(bool on)
+    {
+        if (!on) RestoreLidAction();
+        S.Clamshell = on;
+        Settings.Save();
+        ApplyClamshell();
+        Changed();
+    }
+
+    /// <summary>
+    /// Clamshell on: Windows' plugged-in "When I close the lid" becomes Do Nothing (its own setting is kept to
+    /// put back). Battery keeps the user's setting, so on battery closing the lid still sleeps.
+    /// </summary>
+    private void ApplyClamshell()
+    {
+        if (!S.Clamshell) return;
+        int now = Lid.ReadAcAction();
+        if (now < 0 || now == Lid.DoNothing) return;
+        S.ClamshellLidRestore = now; // also catches a power plan switch that brought back its own setting
+        Settings.Save();
+        Log.Info($"Clamshell: plugged-in lid action {now} -> do nothing ({(Lid.WriteAcAction(Lid.DoNothing) ? "OK" : "failed")})");
+    }
+
+    /// <summary>Put Windows' own plugged-in lid action back (Clamshell off, or C-Helper closing).</summary>
+    private void RestoreLidAction()
+    {
+        if (S.ClamshellLidRestore < 0 || Lid.ReadAcAction() != Lid.DoNothing) return;
+        Log.Info($"Clamshell: plugged-in lid action back to {S.ClamshellLidRestore} ({(Lid.WriteAcAction(S.ClamshellLidRestore) ? "OK" : "failed")})");
+    }
+
+    /// <summary>Unplugged with the lid shut: sleep, as Windows would have when the lid closed on battery.</summary>
+    private void ClamshellUnplugged()
+    {
+        if (!S.Clamshell || OnAC || Lid.Closed != true) return;
+        Log.Info("Clamshell: charger unplugged with the lid closed -> sleep");
+        Application.SetSuspendState(PowerState.Suspend, false, false);
     }
 
     // ---------------- Keyboard / camera ----------------

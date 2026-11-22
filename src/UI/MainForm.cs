@@ -375,8 +375,12 @@ public sealed class MainForm : Form
         Controls.Add(_stockBtn);
         LayoutOptionsTitle();
         _options = Row(46, false, 18,
-            new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"));
+            new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"),
+            new("Clamshell", "clamshell"));
         _options.ButtonClicked += OnOptionClicked;
+        _tips.SetToolTip(_options[4], "Clamshell: on the charger, closing the lid keeps the laptop running. Unplug it with the lid closed and it sleeps.");
+        Lid.Changed -= OnLidChanged; // the layout can be rebuilt
+        Lid.Changed += OnLidChanged;
 
         _netHint = Section("network", "Network");
         int half = (ContentWidth - 6) / 2;
@@ -713,6 +717,11 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Right end of the Options title row: Remove Stock App, then the hint in the space left.</summary>
+    private void OnLidChanged(bool closed)
+    {
+        if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(RefreshState));
+    }
+
     private void LayoutOptionsTitle()
     {
         if (_optionsHint is not { IsDisposed: false }) return;
@@ -1196,6 +1205,9 @@ public sealed class MainForm : Form
             case 3:
                 Run(() => _c.SetFnEsc(!s.FnEscOpensHelper));
                 break;
+            case 4:
+                Run(() => _c.SetClamshell(!s.Clamshell));
+                break;
         }
     }
 
@@ -1287,6 +1299,11 @@ public sealed class MainForm : Form
         _options.SetOn(1, s.AutoPowerMode);
         _options.SetOn(2, _startupEnabled);
         _options.SetOn(3, s.FnEscOpensHelper);
+        _options.SetOn(4, s.Clamshell);
+        _optionsHint.Text = !s.Clamshell ? ""
+            : !Controller.OnAC ? "Clamshell · Works On Charger"
+            : Lid.Closed == true ? "Clamshell · Lid Closed, Still Running"
+            : "Clamshell · Lid Close Keeps Running";
 
         // Battery charge limit
         var charge = _c.Charge;

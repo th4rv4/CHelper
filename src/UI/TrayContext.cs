@@ -67,6 +67,9 @@ public sealed class TrayContext : ApplicationContext
         LockKeys.Toggled += key => _fnKeys.ShowLock(key);
         LockKeys.Start();
 
+        // Lid open / closed, for Clamshell
+        Lid.Watch();
+
         // Taskbar / Start menu clicks from a non-elevated copy ("show") and the installer ("quit")
         _instance = new Instance.Window();
         _instance.ShowRequested += () => _form.ShowNearTray();

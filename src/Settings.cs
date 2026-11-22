@@ -45,6 +45,11 @@ public sealed class AppSettings
     /// <summary>Fn+Esc opens C-Helper instead of the vendor Control Center.</summary>
     public bool FnEscOpensHelper { get; set; } = true;
 
+    /// <summary>Clamshell: on the charger, closing the lid keeps the laptop running.</summary>
+    public bool Clamshell { get; set; }
+    /// <summary>Windows' own plugged-in lid close action, put back when Clamshell is off (-1 = nothing saved).</summary>
+    public int ClamshellLidRestore { get; set; } = -1;
+
     /// <summary>Full Charge Once: the charge limit to put back after unplugging (0 = not active).</summary>
     public int FullChargeRestore { get; set; }
 
