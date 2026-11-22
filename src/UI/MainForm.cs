@@ -31,16 +31,16 @@ public sealed class MainForm : Form
     private bool _stockFound; // kept here so the button survives the window being rebuilt
     private const int StockW = 150;
     private Label _optionsHint;
+    private string _clamshellHint = ""; // the Clamshell part of the Options hint
 
-    // Network row: Wi-Fi Driver Refresh and AdGuard DNS; the hint shows Wi-Fi trouble first, otherwise the DNS state.
-    private Label _netHint;
+    // Wi-Fi Driver Refresh and AdGuard DNS, on the last row of Options; the Options hint shows Wi-Fi trouble first.
     private TileButton _dnsBtn;
     private (int Adapters, int On) _dns;
     private bool _dnsBusy;
     // Network changes (an adapter coming back after a refresh, a new Ethernet / tethering): put AdGuard DNS on it.
     private readonly System.Windows.Forms.Timer _dnsApply = new() { Interval = 5000 };
 
-    // Wi-Fi Driver Refresh in the Network row; red while the Wi-Fi card is stopped or missing (see WifiDriver).
+    // Wi-Fi Driver Refresh in Options; red while the Wi-Fi card is stopped or missing (see WifiDriver).
     private const string WifiLabel = "Wi-Fi Driver Refresh";
     private TileButton _wifiBtn;
     private WifiStatus _wifi;
@@ -56,7 +56,7 @@ public sealed class MainForm : Form
     /// <summary>The Wi-Fi card was found stopped (once each time it breaks).</summary>
     public event Action WifiStopped;
     private StepSlider _charge;
-    private SegRow _modes, _gpu, _fans, _screen, _options, _kbEffects, _kbSpeed;
+    private SegRow _modes, _gpu, _fans, _screen, _options, _options2, _kbEffects, _kbSpeed;
     private TileButton _kbTimeoutAC, _kbTimeoutDC;
     private readonly ToolTip _tips = new() { InitialDelay = 400 };
     private FanCurveForm _curves;
@@ -374,15 +374,29 @@ public sealed class MainForm : Form
         _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
         Controls.Add(_stockBtn);
         LayoutOptionsTitle();
+        // Options grid: 3 + 3 + 2 (Wi-Fi Driver Refresh and AdGuard DNS share the last row).
         _options = Row(46, false, 18,
-            new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"), new("Fn+Esc", "keyboard"),
-            new("Clamshell", "clamshell"));
+            new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"));
         _options.ButtonClicked += OnOptionClicked;
-        _tips.SetToolTip(_options[4], "Clamshell: on the charger, closing the lid keeps the laptop running. Unplug it with the lid closed and it sleeps.");
+        _y -= 12 - 8; // rows of one grid sit closer together
+        _options2 = Row(46, false, 18,
+            new("Fn+Esc", "keyboard"), new("Clamshell", "clamshell"), new("Full Charge Once", "plugged", Theme.Accent));
+        _options2.ButtonClicked += i =>
+        {
+            if (i < 2) OnOptionClicked(i + 3);
+            else Run(() =>
+            {
+                if (_c.FullChargeOnce) _c.CancelFullChargeOnce("cancelled");
+                else _c.StartFullChargeOnce();
+            });
+        };
+        _fullCharge = _options2[2];
+        _tips.SetToolTip(_fullCharge, "Charge to 100% this time. Your charge limit comes back by itself when you unplug.");
+        _y -= 12 - 8;
+        _tips.SetToolTip(_options2[1], "Clamshell: on the charger, closing the lid keeps the laptop running. Unplug it with the lid closed and it sleeps.");
         Lid.Changed -= OnLidChanged; // the layout can be rebuilt
         Lid.Changed += OnLidChanged;
 
-        _netHint = Section("network", "Network");
         int half = (ContentWidth - 6) / 2;
         _wifiBtn = new TileButton
         {
@@ -393,7 +407,7 @@ public sealed class MainForm : Form
             Font = _fBody,
             Accent = Theme.Turbo,
             Location = new Point(S(Pad), S(_y)),
-            Size = new Size(S(half), S(40)),
+            Size = new Size(S(half), S(46)),
         };
         _wifiBtn.Click += (_, _) =>
         {
@@ -411,36 +425,17 @@ public sealed class MainForm : Form
             Font = _fBody,
             Accent = Theme.Standard,
             Location = new Point(S(Pad + half + 6), S(_y)),
-            Size = new Size(S(ContentWidth - half - 6), S(40)),
+            Size = new Size(S(ContentWidth - half - 6), S(46)),
         };
         _dnsBtn.Click += (_, _) => _ = ToggleDnsAsync();
         _tips.SetToolTip(_dnsBtn,
             "Blocks ads and trackers for the whole laptop with AdGuard's DNS (with DNS over HTTPS), on Wi-Fi, Ethernet and tethering. Comes back by itself after a Wi-Fi Driver Refresh.");
         Controls.Add(_dnsBtn);
-        _y += 40 + 12;
+        _y += 46 + 12;
         ApplyWifiUi();
         ApplyDnsUi();
 
         _chargeHint = Section("battery-saver", "Battery Charge Limit");
-        // Full Charge Once at the right end of the title row; the hint moves to its left.
-        const int fullW = 150;
-        _chargeHint.Width = S(ContentWidth - 200 - fullW - 10);
-        _fullCharge = new TileButton
-        {
-            Text = "Full Charge Once",
-            Vertical = false,
-            Font = _fSmall,
-            Accent = Theme.Accent,
-            Location = new Point(S(Pad + ContentWidth - fullW), S(_y - 28 - 3)),
-            Size = new Size(S(fullW), S(26)),
-        };
-        _fullCharge.Click += (_, _) => Run(() =>
-        {
-            if (_c.FullChargeOnce) _c.CancelFullChargeOnce("cancelled");
-            else _c.StartFullChargeOnce();
-        });
-        _tips.SetToolTip(_fullCharge, "Charge to 100% this time. Your charge limit comes back by itself when you unplug.");
-        Controls.Add(_fullCharge);
         _charge = new StepSlider
         {
             Location = new Point(S(Pad), S(_y - 4)),
@@ -888,24 +883,27 @@ public sealed class MainForm : Form
         UpdateNetHint();
     }
 
-    /// <summary>Network hint: Wi-Fi trouble or refresh progress first, otherwise whether AdGuard DNS is on.</summary>
+    /// <summary>
+    /// Options hint: Wi-Fi trouble or refresh progress first (on its own), otherwise whether AdGuard DNS is on,
+    /// then what Clamshell is doing.
+    /// </summary>
     private void UpdateNetHint()
     {
-        if (_netHint is not { IsDisposed: false }) return;
+        if (_optionsHint is not { IsDisposed: false }) return;
         var u = _wifiUi;
         if (u.Visible && !string.IsNullOrEmpty(u.Hint))
         {
-            _netHint.Text = u.Hint;
-            _netHint.ForeColor = u.HintColor == default ? Theme.Muted : u.HintColor;
+            _optionsHint.Text = u.Hint;
+            _optionsHint.ForeColor = u.HintColor == default ? Theme.Muted : u.HintColor;
             return;
         }
-        _netHint.ForeColor = Theme.Muted;
+        _optionsHint.ForeColor = Theme.Muted;
         bool on = Settings.Current.AdGuardDns;
-        if (_dnsBusy) _netHint.Text = on ? "Turning On AdGuard DNS…" : "Turning Off AdGuard DNS…";
-        else if (!on) _netHint.Text = "";
-        else if (_dns.Adapters == 0) _netHint.Text = "AdGuard DNS On";
-        else if (_dns.On < _dns.Adapters) _netHint.Text = $"AdGuard DNS On · {_dns.On} Of {_dns.Adapters} Adapters";
-        else _netHint.Text = $"AdGuard DNS On · {_dns.Adapters} Adapter{(_dns.Adapters == 1 ? "" : "s")}";
+        string dns = _dnsBusy ? (on ? "Turning On AdGuard DNS…" : "Turning Off AdGuard DNS…")
+            : !on ? ""
+            : _dns.Adapters > 0 && _dns.On < _dns.Adapters ? $"AdGuard DNS On · {_dns.On} Of {_dns.Adapters} Adapters"
+            : "AdGuard DNS On";
+        _optionsHint.Text = string.Join(" · ", new[] { dns, _clamshellHint }.Where(t => t.Length > 0));
     }
 
     // ---------------- AdGuard DNS ----------------
@@ -1298,12 +1296,13 @@ public sealed class MainForm : Form
         _options.SetOn(0, s.Camera);
         _options.SetOn(1, s.AutoPowerMode);
         _options.SetOn(2, _startupEnabled);
-        _options.SetOn(3, s.FnEscOpensHelper);
-        _options.SetOn(4, s.Clamshell);
-        _optionsHint.Text = !s.Clamshell ? ""
-            : !Controller.OnAC ? "Clamshell · Works On Charger"
-            : Lid.Closed == true ? "Clamshell · Lid Closed, Still Running"
-            : "Clamshell · Lid Close Keeps Running";
+        _options2.SetOn(0, s.FnEscOpensHelper);
+        _options2.SetOn(1, s.Clamshell);
+        _clamshellHint = !s.Clamshell ? ""
+            : !Controller.OnAC ? "Clamshell Needs Charger"
+            : Lid.Closed == true ? "Lid Closed, Still Running"
+            : "Clamshell Ready";
+        UpdateNetHint();
 
         // Battery charge limit
         var charge = _c.Charge;
@@ -1324,7 +1323,7 @@ public sealed class MainForm : Form
 
     private static string ChargeText(int stop, Charger.State state)
     {
-        // Short: it shares the title row with the Full Charge Once button.
+        // Short: it sits on the title row.
         if (stop >= 100) return "No Limit";
         return state != null && state.Enabled && state.Stop == stop
             ? $"Stop {stop}% · Start {state.Start}%"
