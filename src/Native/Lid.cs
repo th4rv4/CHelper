@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace CHelper.Native;
 
 /// <summary>
-/// The lid: Windows' "When I close the lid" setting while plugged in, and whether the lid is closed right now.
+/// The lid: Windows' "When I close the lid" setting (plugged in and on battery), and whether the lid is closed right now.
 /// </summary>
 public static class Lid
 {
@@ -29,16 +29,32 @@ public static class Lid
     }
 
     /// <summary>The plugged-in lid close action of the active power plan, or -1 if it can't be read.</summary>
-    public static int ReadAcAction()
+    public static int ReadAcAction() => Read(true);
+
+    /// <summary>The on-battery lid close action of the active power plan, or -1 if it can't be read.</summary>
+    public static int ReadDcAction() => Read(false);
+
+    public static bool WriteAcAction(int value) => Write(true, value);
+
+    public static bool WriteDcAction(int value) => Write(false, value);
+
+    private static int Read(bool plugged)
     {
         if (!ActiveScheme(out var scheme)) return -1;
-        return PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, out uint v) == 0 ? (int)v : -1;
+        uint v;
+        uint r = plugged
+            ? PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, out v)
+            : PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, out v);
+        return r == 0 ? (int)v : -1;
     }
 
-    public static bool WriteAcAction(int value)
+    private static bool Write(bool plugged, int value)
     {
         if (!ActiveScheme(out var scheme)) return false;
-        if (PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, (uint)value) != 0) return false;
+        uint r = plugged
+            ? PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, (uint)value)
+            : PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref SubButtons, ref LidAction, (uint)value);
+        if (r != 0) return false;
         return PowerSetActiveScheme(IntPtr.Zero, ref scheme) == 0; // makes the change take effect
     }
 
@@ -96,6 +112,12 @@ public static class Lid
 
     [DllImport("powrprof.dll")]
     private static extern uint PowerWriteACValueIndex(IntPtr root, ref Guid scheme, ref Guid sub, ref Guid setting, uint value);
+
+    [DllImport("powrprof.dll")]
+    private static extern uint PowerReadDCValueIndex(IntPtr root, ref Guid scheme, ref Guid sub, ref Guid setting, out uint value);
+
+    [DllImport("powrprof.dll")]
+    private static extern uint PowerWriteDCValueIndex(IntPtr root, ref Guid scheme, ref Guid sub, ref Guid setting, uint value);
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr LocalFree(IntPtr mem);

@@ -374,30 +374,39 @@ public sealed class MainForm : Form
         _tips.SetToolTip(_stockBtn, "The stock Control Center is still on this laptop. C-Helper doesn't need it.");
         Controls.Add(_stockBtn);
         LayoutOptionsTitle();
-        // Options grid: 3 + 3 + 2 (Wi-Fi Driver Refresh and AdGuard DNS share the last row).
+        // Options grid: 3 + 3 + 3 (Full Charge Once, Wi-Fi Driver Refresh and AdGuard DNS share the last row).
         _options = Row(46, false, 18,
             new("Camera", "camera"), new("AUTO", "automation"), new("Startup", "startup"));
         _options.ButtonClicked += OnOptionClicked;
         _y -= 12 - 8; // rows of one grid sit closer together
         _options2 = Row(46, false, 18,
-            new("Fn+Esc", "keyboard"), new("Clamshell", "clamshell"), new("Full Charge Once", "plugged", Theme.Accent));
-        _options2.ButtonClicked += i =>
-        {
-            if (i < 2) OnOptionClicked(i + 3);
-            else Run(() =>
-            {
-                if (_c.FullChargeOnce) _c.CancelFullChargeOnce("cancelled");
-                else _c.StartFullChargeOnce();
-            });
-        };
-        _fullCharge = _options2[2];
-        _tips.SetToolTip(_fullCharge, "Charge to 100% this time. Your charge limit comes back by itself when you unplug.");
+            new("Fn+Esc", "keyboard"), new("Clamshell", "clamshell"), new("Clamshell Battery", "battery-saver"));
+        _options2.ButtonClicked += i => OnOptionClicked(i + 3);
+        _tips.SetToolTip(_options2[2], "Clamshell Battery: closing the lid keeps the laptop running on battery too, so a power cut doesn't put it to sleep. It runs the battery down with the lid shut.");
         _y -= 12 - 8;
-        _tips.SetToolTip(_options2[1], "Clamshell: on the charger, closing the lid keeps the laptop running. Unplug it with the lid closed and it sleeps.");
+        int third = (ContentWidth - 12) / 3;
+        _fullCharge = new TileButton
+        {
+            Text = "Full Charge Once",
+            IconName = "plugged",
+            IconSize = 18,
+            Vertical = false,
+            Font = _fBody,
+            Accent = Theme.Accent,
+            Location = new Point(S(Pad), S(_y)),
+            Size = new Size(S(third), S(46)),
+        };
+        _fullCharge.Click += (_, _) => Run(() =>
+        {
+            if (_c.FullChargeOnce) _c.CancelFullChargeOnce("cancelled");
+            else _c.StartFullChargeOnce();
+        });
+        _tips.SetToolTip(_fullCharge, "Charge to 100% this time. Your charge limit comes back by itself when you unplug.");
+        Controls.Add(_fullCharge);
+        _tips.SetToolTip(_options2[1], "Clamshell: on the charger, closing the lid keeps the laptop running. Unplug it with the lid closed and it sleeps, unless Clamshell Battery is on.");
         Lid.Changed -= OnLidChanged; // the layout can be rebuilt
         Lid.Changed += OnLidChanged;
 
-        int half = (ContentWidth - 6) / 2;
         _wifiBtn = new TileButton
         {
             Text = WifiLabel,
@@ -406,8 +415,8 @@ public sealed class MainForm : Form
             Vertical = false,
             Font = _fBody,
             Accent = Theme.Turbo,
-            Location = new Point(S(Pad), S(_y)),
-            Size = new Size(S(half), S(46)),
+            Location = new Point(S(Pad + third + 6), S(_y)),
+            Size = new Size(S(third), S(46)),
         };
         _wifiBtn.Click += (_, _) =>
         {
@@ -424,8 +433,8 @@ public sealed class MainForm : Form
             Vertical = false,
             Font = _fBody,
             Accent = Theme.Standard,
-            Location = new Point(S(Pad + half + 6), S(_y)),
-            Size = new Size(S(ContentWidth - half - 6), S(46)),
+            Location = new Point(S(Pad + 2 * (third + 6)), S(_y)),
+            Size = new Size(S(ContentWidth - 2 * (third + 6)), S(46)),
         };
         _dnsBtn.Click += (_, _) => _ = ToggleDnsAsync();
         _tips.SetToolTip(_dnsBtn,
@@ -1206,6 +1215,9 @@ public sealed class MainForm : Form
             case 4:
                 Run(() => _c.SetClamshell(!s.Clamshell));
                 break;
+            case 5:
+                Run(() => _c.SetClamshellBattery(!s.ClamshellBattery));
+                break;
         }
     }
 
@@ -1298,9 +1310,12 @@ public sealed class MainForm : Form
         _options.SetOn(2, _startupEnabled);
         _options2.SetOn(0, s.FnEscOpensHelper);
         _options2.SetOn(1, s.Clamshell);
-        _clamshellHint = !s.Clamshell ? ""
-            : !Controller.OnAC ? "Clamshell Needs Charger"
+        _options2.SetOn(2, s.ClamshellBattery);
+        bool clamActive = Controller.OnAC ? s.Clamshell : s.ClamshellBattery;
+        _clamshellHint = !s.Clamshell && !s.ClamshellBattery ? ""
+            : !clamActive ? (Controller.OnAC ? "Clamshell Only On Battery" : "Clamshell Needs Charger")
             : Lid.Closed == true ? "Lid Closed, Still Running"
+            : s.Clamshell && s.ClamshellBattery ? "Clamshell Ready On Battery"
             : "Clamshell Ready";
         UpdateNetHint();
 

@@ -49,6 +49,10 @@ public sealed class AppSettings
     public bool Clamshell { get; set; }
     /// <summary>Windows' own plugged-in lid close action, put back when Clamshell is off (-1 = nothing saved).</summary>
     public int ClamshellLidRestore { get; set; } = -1;
+    /// <summary>Clamshell Battery: closing the lid keeps the laptop running on battery too.</summary>
+    public bool ClamshellBattery { get; set; }
+    /// <summary>Windows' own on-battery lid close action, put back when Clamshell Battery is off (-1 = nothing saved).</summary>
+    public int ClamshellLidRestoreDc { get; set; } = -1;
 
     /// <summary>Full Charge Once: the charge limit to put back after unplugging (0 = not active).</summary>
     public int FullChargeRestore { get; set; }

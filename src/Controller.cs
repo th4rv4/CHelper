@@ -316,7 +316,7 @@ public sealed class Controller
     {
         StopCurves("exit");
         // Without C-Helper running nothing would put the laptop to sleep when unplugged with the lid shut.
-        if (S.Clamshell) Safe("clamshell", RestoreLidAction);
+        if (S.Clamshell || S.ClamshellBattery) Safe("clamshell", RestoreLidAction);
         if (Effects.Running)
         {
             Effects.Stop();
@@ -580,8 +580,17 @@ public sealed class Controller
 
     public void SetClamshell(bool on)
     {
-        if (!on) RestoreLidAction();
+        if (!on) RestoreAcLidAction();
         S.Clamshell = on;
+        Settings.Save();
+        ApplyClamshell();
+        Changed();
+    }
+
+    public void SetClamshellBattery(bool on)
+    {
+        if (!on) RestoreDcLidAction();
+        S.ClamshellBattery = on;
         Settings.Save();
         ApplyClamshell();
         Changed();
@@ -589,29 +598,58 @@ public sealed class Controller
 
     /// <summary>
     /// Clamshell on: Windows' plugged-in "When I close the lid" becomes Do Nothing (its own setting is kept to
-    /// put back). Battery keeps the user's setting, so on battery closing the lid still sleeps.
+    /// put back). Clamshell Battery does the same for the on-battery setting; without it the battery keeps the
+    /// user's setting, so on battery closing the lid still sleeps.
     /// </summary>
     private void ApplyClamshell()
     {
-        if (!S.Clamshell) return;
-        int now = Lid.ReadAcAction();
-        if (now < 0 || now == Lid.DoNothing) return;
-        S.ClamshellLidRestore = now; // also catches a power plan switch that brought back its own setting
-        Settings.Save();
-        Log.Info($"Clamshell: plugged-in lid action {now} -> do nothing ({(Lid.WriteAcAction(Lid.DoNothing) ? "OK" : "failed")})");
+        if (S.Clamshell)
+        {
+            int now = Lid.ReadAcAction();
+            if (now >= 0 && now != Lid.DoNothing)
+            {
+                S.ClamshellLidRestore = now; // also catches a power plan switch that brought back its own setting
+                Settings.Save();
+                Log.Info($"Clamshell: plugged-in lid action {now} -> do nothing ({(Lid.WriteAcAction(Lid.DoNothing) ? "OK" : "failed")})");
+            }
+        }
+        if (S.ClamshellBattery)
+        {
+            int now = Lid.ReadDcAction();
+            if (now >= 0 && now != Lid.DoNothing)
+            {
+                S.ClamshellLidRestoreDc = now;
+                Settings.Save();
+                Log.Info($"Clamshell: on-battery lid action {now} -> do nothing ({(Lid.WriteDcAction(Lid.DoNothing) ? "OK" : "failed")})");
+            }
+        }
     }
 
-    /// <summary>Put Windows' own plugged-in lid action back (Clamshell off, or C-Helper closing).</summary>
+    /// <summary>Put Windows' own lid actions back (C-Helper closing).</summary>
     private void RestoreLidAction()
+    {
+        if (S.Clamshell) RestoreAcLidAction();
+        if (S.ClamshellBattery) RestoreDcLidAction();
+    }
+
+    /// <summary>Put Windows' own plugged-in lid action back (Clamshell off).</summary>
+    private void RestoreAcLidAction()
     {
         if (S.ClamshellLidRestore < 0 || Lid.ReadAcAction() != Lid.DoNothing) return;
         Log.Info($"Clamshell: plugged-in lid action back to {S.ClamshellLidRestore} ({(Lid.WriteAcAction(S.ClamshellLidRestore) ? "OK" : "failed")})");
     }
 
-    /// <summary>Unplugged with the lid shut: sleep, as Windows would have when the lid closed on battery.</summary>
+    /// <summary>Put Windows' own on-battery lid action back (Clamshell Battery off).</summary>
+    private void RestoreDcLidAction()
+    {
+        if (S.ClamshellLidRestoreDc < 0 || Lid.ReadDcAction() != Lid.DoNothing) return;
+        Log.Info($"Clamshell: on-battery lid action back to {S.ClamshellLidRestoreDc} ({(Lid.WriteDcAction(S.ClamshellLidRestoreDc) ? "OK" : "failed")})");
+    }
+
+    /// <summary>Unplugged with the lid shut: sleep, as Windows would have when the lid closed on battery. Not with Clamshell Battery.</summary>
     private void ClamshellUnplugged()
     {
-        if (!S.Clamshell || OnAC || Lid.Closed != true) return;
+        if (!S.Clamshell || S.ClamshellBattery || OnAC || Lid.Closed != true) return;
         Log.Info("Clamshell: charger unplugged with the lid closed -> sleep");
         Application.SetSuspendState(PowerState.Suspend, false, false);
     }
