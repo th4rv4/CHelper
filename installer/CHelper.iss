@@ -66,6 +66,11 @@ Source: "{#Root}\vendor\wifi\*"; DestDir: "{app}\wifi"; Flags: ignoreversion rec
 Source: "{#Root}\vendor\wifi-fallback\*"; DestDir: "{app}\wifi-fallback"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\installer\Setup-SoundBlaster.ps1"; DestDir: "{app}\sound"; Flags: ignoreversion
 
+[InstallDelete]
+; The bundled Wi-Fi drivers are replaced as a whole, so files of an older bundle don't pile up next to the new ones.
+Type: filesandordirs; Name: "{app}\wifi"
+Type: filesandordirs; Name: "{app}\wifi-fallback"
+
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
