@@ -376,7 +376,7 @@ public sealed class MainForm : Form
         LayoutOptionsTitle();
         // Options grid: 3 + 3 + 2 (Wi-Fi Driver Refresh and AdGuard DNS share the last row).
         _options = Row(46, false, 18,
-            new("Camera", "camera"), new("Auto Mode", "automation"), new("Startup", "startup"));
+            new("Camera", "camera"), new("AUTO", "automation"), new("Startup", "startup"));
         _options.ButtonClicked += OnOptionClicked;
         _y -= 12 - 8; // rows of one grid sit closer together
         _options2 = Row(46, false, 18,
