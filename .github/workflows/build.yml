@@ -1,11 +1,12 @@
 name: Build
 
-# Builds only when a version tag is pushed (e.g. v1.0.2) or when started by hand from the Actions tab.
-# Ordinary commits and pushes don't run it. The tag is the version: there's no version number to bump in
-# the code. A tag push also publishes a GitHub Release with the installer, the exe and the commits since
-# the previous tag.
+# Builds on every push to main, on a version tag (e.g. v1.0.2) and when started by hand from the Actions tab.
+# The tag is the version: there's no version number to bump in the code. Only a tag push publishes a GitHub
+# Release (the installer, the exe and the commits since the previous tag); other builds are 0.0.0 and only
+# keep their files as a download on the run, so the in-app updater never offers them.
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
