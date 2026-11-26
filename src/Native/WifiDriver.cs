@@ -19,7 +19,8 @@ public sealed record WifiStatus(WifiState State, string Name, string DeviceId, i
 /// driver packs and Windows Update), put back one known-good copy and let Windows set the card up again.
 ///
 /// The known-good copy is saved by C-Helper itself: whenever the card is working, the driver package it is using is
-/// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes). Until then (a fresh install)
+/// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes; the copy it replaces is kept in
+/// WifiDriver.previous, and the fix falls back to it when the newest copy does not bring the card back). Until then (a fresh install)
 /// the driver bundled with C-Helper is used ("wifi" next to the exe, from vendor/wifi). With neither, the fix can only
 /// restart the card.
 ///
@@ -35,24 +36,27 @@ public static class WifiDriver
 
     private static readonly string BackupRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiDriver");
-    private static string BackupVersionFile => Path.Combine(BackupRoot, "version.txt");
+    private static readonly string PreviousRoot = BackupRoot + ".previous";
     private static string BundledRoot => Path.Combine(AppContext.BaseDirectory, "wifi");
     private static readonly string NetworksRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiNetworks");
 
     /// <summary>Version of the saved driver copy, or null when there is none yet.</summary>
-    public static string SavedVersion
+    public static string SavedVersion => VersionOf(BackupRoot);
+
+    /// <summary>Version of the copy kept from before the last driver change, or null when there is none.</summary>
+    public static string PreviousVersion => VersionOf(PreviousRoot);
+
+    private static string VersionOf(string root)
     {
-        get
+        try
         {
-            try
-            {
-                return File.Exists(BackupVersionFile) && Directory.GetFiles(BackupRoot, "*.inf", SearchOption.AllDirectories).Length > 0
-                    ? File.ReadAllText(BackupVersionFile).Trim()
-                    : null;
-            }
-            catch { return null; }
+            string file = Path.Combine(root, "version.txt");
+            return File.Exists(file) && Directory.GetFiles(root, "*.inf", SearchOption.AllDirectories).Length > 0
+                ? File.ReadAllText(file).Trim()
+                : null;
         }
+        catch { return null; }
     }
 
     // ---------------------------------------------------------------- detect
@@ -179,6 +183,7 @@ public static class WifiDriver
     public static void SaveWorkingDriver(WifiStatus status)
     {
         if (status.State != WifiState.Working || string.IsNullOrEmpty(status.DeviceId)) return;
+        if (!HasWifiAdapter()) return; // the card looks fine but Windows has no Wi-Fi: not a copy worth keeping
         SaveNetworks();
         try
         {
@@ -198,7 +203,12 @@ public static class WifiDriver
                 return;
             }
             File.WriteAllText(Path.Combine(temp, "version.txt"), version);
-            if (Directory.Exists(BackupRoot)) Directory.Delete(BackupRoot, true);
+            if (Directory.Exists(BackupRoot))
+            {
+                // Keep the copy being replaced: if the new driver turns out bad, the fix can go back to it.
+                if (Directory.Exists(PreviousRoot)) Directory.Delete(PreviousRoot, true);
+                Directory.Move(BackupRoot, PreviousRoot);
+            }
             Directory.Move(temp, BackupRoot);
             Log.Info($"Saved a working copy of the Wi-Fi driver {version} ({inf})");
         }
@@ -229,7 +239,18 @@ public static class WifiDriver
     public static WifiStatus Repair(WifiStatus status, IProgress<(int Percent, string Step)> progress)
     {
         if (status.State == WifiState.Working) SaveNetworks(); // the latest list, before the card loses it
-        var after = ReinstallDriver(status, progress);
+        var (source, version) = DriverSource();
+        var after = ReinstallDriver(status, progress, source, version);
+
+        // The newest saved copy did not bring the card back: go back to the one before it.
+        string previous = PreviousVersion;
+        if (after.State != WifiState.Working && source == BackupRoot && previous != null && previous != version)
+        {
+            Log.Info($"Wi-Fi still stopped with driver {version}: trying the previous copy {previous}");
+            after = ReinstallDriver(after, progress, PreviousRoot, previous);
+            if (after.State == WifiState.Working) UsePreviousAsSaved(version, previous);
+        }
+
         if (after.State == WifiState.Working)
         {
             progress.Report((99, "Restoring Saved Networks…"));
@@ -238,7 +259,23 @@ public static class WifiDriver
         return after;
     }
 
-    private static WifiStatus ReinstallDriver(WifiStatus status, IProgress<(int Percent, string Step)> progress)
+    /// <summary>The previous copy worked and the newest did not: drop the bad one so it is not tried again.</summary>
+    private static void UsePreviousAsSaved(string bad, string good)
+    {
+        try
+        {
+            if (Directory.Exists(BackupRoot)) Directory.Delete(BackupRoot, true);
+            Directory.Move(PreviousRoot, BackupRoot);
+            Log.Info($"Wi-Fi driver {good} is the saved copy again; {bad} did not work");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Switching the saved Wi-Fi driver failed", ex);
+        }
+    }
+
+    private static WifiStatus ReinstallDriver(WifiStatus status, IProgress<(int Percent, string Step)> progress,
+        string source, string version)
     {
         Log.Info(status.State switch
         {
@@ -246,7 +283,6 @@ public static class WifiDriver
             WifiState.Working => $"Wi-Fi driver refresh: {status.Name} (working)",
             _ => $"Wi-Fi driver refresh: {status.Name} · Code {status.Problem}",
         });
-        var (source, version) = DriverSource();
 
         if (source == null)
         {
@@ -274,7 +310,7 @@ public static class WifiDriver
             progress.Report((10 + 40 * (i + 1) / stale.Count, "Removing Old Drivers…"));
         }
 
-        string from = source == BackupRoot ? "saved" : "bundled";
+        string from = source == BackupRoot ? "saved" : source == PreviousRoot ? "previous" : "bundled";
         progress.Report((55, $"Reinstalling Driver {version}…"));
         var (addExit, addOutput) = PnpUtil($"/add-driver \"{Path.Combine(source, "*.inf")}\" /subdirs /install");
         Log.Info($"Reinstalled the {from} Wi-Fi driver {version} ({addExit})" + (addExit is 0 or 3010 ? "" : $": {addOutput}"));
@@ -292,10 +328,27 @@ public static class WifiDriver
             Thread.Sleep(1000);
             now = Check();
             progress.Report((Math.Min(99, from + i * 2), "Starting The Card…"));
-            if (now.State == WifiState.Working) break;
+            if (now.State == WifiState.Working && HasWifiAdapter()) break;
+        }
+        // Device Manager can call a card fine while Windows still has no Wi-Fi on it: that is not fixed.
+        if (now.State == WifiState.Working && !HasWifiAdapter())
+        {
+            Log.Info("Windows has no Wi-Fi adapter yet, so the card is not working");
+            now = new WifiStatus(WifiState.Stopped, now.Name, now.DeviceId, 0);
         }
         Log.Info($"Wi-Fi after the fix: {now.State}" + (now.Problem != 0 ? $" · Code {now.Problem}" : ""));
         return now;
+    }
+
+    /// <summary>True when Windows has a Wi-Fi network adapter (what "netsh wlan" needs to add networks).</summary>
+    private static bool HasWifiAdapter()
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Any(n => n.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211);
+        }
+        catch { return true; } // cannot tell: trust the card's own status
     }
 
     /// <summary>
