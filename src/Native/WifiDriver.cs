@@ -20,7 +20,8 @@ public sealed record WifiStatus(WifiState State, string Name, string DeviceId, i
 ///
 /// The known-good copy is saved by C-Helper itself: whenever the card is working, the driver package it is using is
 /// exported to %ProgramData%\CHelper\WifiDriver (again whenever its version changes; the copy it replaces is kept in
-/// WifiDriver.previous, and the fix falls back to it when the newest copy does not bring the card back). Until then (a fresh install)
+/// WifiDriver.previous, and the fix falls back to it when the newest copy does not bring the card back; as a last
+/// resort it uses the older driver shipped in "wifi-fallback"). Until then (a fresh install)
 /// the driver bundled with C-Helper is used ("wifi" next to the exe, from vendor/wifi). With neither, the fix can only
 /// restart the card.
 ///
@@ -38,6 +39,8 @@ public static class WifiDriver
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiDriver");
     private static readonly string PreviousRoot = BackupRoot + ".previous";
     private static string BundledRoot => Path.Combine(AppContext.BaseDirectory, "wifi");
+    // An older driver that worked on this laptop, shipped as a last resort (never installed by setup itself).
+    private static string FallbackRoot => Path.Combine(AppContext.BaseDirectory, "wifi-fallback");
     private static readonly string NetworksRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CHelper", "WifiNetworks");
 
@@ -160,18 +163,25 @@ public static class WifiDriver
     {
         string saved = SavedVersion;
         if (saved != null) return (BackupRoot, saved);
+        string bundled = BundledVersion(BundledRoot);
+        return bundled == null ? (null, null) : (BundledRoot, bundled);
+    }
+
+    /// <summary>Version of a driver folder shipped with C-Helper (read from its .inf), or null when there is none.</summary>
+    private static string BundledVersion(string root)
+    {
         try
         {
-            if (!Directory.Exists(BundledRoot)) return (null, null);
-            foreach (string inf in Directory.GetFiles(BundledRoot, "*.inf", SearchOption.AllDirectories).Where(IsIntelWifiInf))
+            if (!Directory.Exists(root)) return null;
+            foreach (string inf in Directory.GetFiles(root, "*.inf", SearchOption.AllDirectories).Where(IsIntelWifiInf))
             {
                 var ver = Regex.Match(File.ReadAllText(inf), @"^\s*DriverVer\s*=\s*[^,]*,\s*([\d.]+)",
                     RegexOptions.IgnoreCase | RegexOptions.Multiline);
-                return (BundledRoot, ver.Success ? ver.Groups[1].Value : "bundled");
+                return ver.Success ? ver.Groups[1].Value : "bundled";
             }
         }
         catch { }
-        return (null, null);
+        return null;
     }
 
     // ---------------------------------------------------------------- keep a good copy
@@ -251,6 +261,15 @@ public static class WifiDriver
             if (after.State == WifiState.Working) UsePreviousAsSaved(version, previous);
         }
 
+        // Last resort: the older driver shipped with C-Helper, when it is a version not tried yet.
+        string fallback = BundledVersion(FallbackRoot);
+        if (after.State != WifiState.Working && fallback != null && fallback != version && fallback != previous)
+        {
+            Log.Info($"Wi-Fi still stopped: trying the driver shipped with C-Helper, {fallback}");
+            after = ReinstallDriver(after, progress, FallbackRoot, fallback);
+            if (after.State == WifiState.Working) ForgetSavedDrivers(fallback);
+        }
+
         if (after.State == WifiState.Working)
         {
             progress.Report((99, "Restoring Saved Networks…"));
@@ -271,6 +290,21 @@ public static class WifiDriver
         catch (Exception ex)
         {
             Log.Error("Switching the saved Wi-Fi driver failed", ex);
+        }
+    }
+
+    /// <summary>The shipped driver worked where the saved ones did not: drop them so the next save keeps the one in use.</summary>
+    private static void ForgetSavedDrivers(string good)
+    {
+        try
+        {
+            if (Directory.Exists(BackupRoot)) Directory.Delete(BackupRoot, true);
+            if (Directory.Exists(PreviousRoot)) Directory.Delete(PreviousRoot, true);
+            Log.Info($"Wi-Fi driver {good} works: the saved copies that did not are dropped");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Dropping the saved Wi-Fi drivers failed", ex);
         }
     }
 
@@ -310,7 +344,7 @@ public static class WifiDriver
             progress.Report((10 + 40 * (i + 1) / stale.Count, "Removing Old Drivers…"));
         }
 
-        string from = source == BackupRoot ? "saved" : source == PreviousRoot ? "previous" : "bundled";
+        string from = source == BackupRoot ? "saved" : source == PreviousRoot ? "previous" : source == FallbackRoot ? "shipped" : "bundled";
         progress.Report((55, $"Reinstalling Driver {version}…"));
         var (addExit, addOutput) = PnpUtil($"/add-driver \"{Path.Combine(source, "*.inf")}\" /subdirs /install");
         Log.Info($"Reinstalled the {from} Wi-Fi driver {version} ({addExit})" + (addExit is 0 or 3010 ? "" : $": {addOutput}"));

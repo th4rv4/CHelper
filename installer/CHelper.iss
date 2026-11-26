@@ -7,6 +7,7 @@
 ;   vendor\driver\*            Clevo ACPI bridge driver, installed with pnputil if included
 ;   vendor\sound\*             Sound Blaster Studio drivers (Creative Realtek extension, Creative's engine and
 ;                              speaker tuning), set up by Setup-SoundBlaster.ps1 on the EVOL P15's audio chip
+;   vendor\wifi-fallback\*     An older Intel Wi-Fi driver, tried by Wi-Fi Driver Refresh as a last resort
 ;   vendor\wifi\*              Intel Wi-Fi driver (AX210 / AX211), used by Wi-Fi Driver Refresh and installed with
 ;                              pnputil when the Wi-Fi card has no working driver
 
@@ -62,6 +63,7 @@ Source: "{#Root}\vendor\InsydeDCHU.dll"; DestDir: "{app}"; Flags: ignoreversion 
 Source: "{#Root}\vendor\driver\*"; DestDir: "{app}\driver"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\vendor\sound\*"; DestDir: "{app}\sound"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\vendor\wifi\*"; DestDir: "{app}\wifi"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "{#Root}\vendor\wifi-fallback\*"; DestDir: "{app}\wifi-fallback"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "{#Root}\installer\Setup-SoundBlaster.ps1"; DestDir: "{app}\sound"; Flags: ignoreversion
 
 [Icons]
